@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SONARÍA Radio - En Vivo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* ======================================================= */
+        /* ||   CSS CORREGIDO PARA VIDEOS (LÓGICA INVERTIDA)    || */
+        /* ======================================================= */
+
+        .video-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: -2;
+            background-color: #6a63a8;
+            /* Color de respaldo */
+        }
+
+        /* --- ESTADO POR DEFECTO: ESCRITORIO (ROTADO 90 GRADOS) --- */
+        #video-fondo,
+        #video-frente {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+
+            /* Invertimos las dimensiones conceptuales para llenar la pantalla después de rotar */
+            /* La altura del video será el ancho de la pantalla del PC */
+            height: 100vw;
+            /* El ancho del video será el alto de la pantalla del PC */
+            width: 100vh;
+
+            /* Centramos y rotamos */
+            transform: translate(-50%, -50%) rotate(90deg);
+
+            /* 'cover' se asegura de que el video (ya rotado) llene el espacio sin deformarse */
+            object-fit: cover;
+        }
+
+        #video-frente {
+            /* Estos estilos se aplican siempre */
+            mix-blend-mode: multiply;
+            filter: contrast(3) brightness(0.6) saturate(4);
+        }
+
+
+        /* --- MEDIA QUERY: MÓVIL (PANTALLAS DE 768px O MENOS) --- */
+        @media (max-width: 768px) {
+            #recommendationsList {
+                grid-template-columns: 1fr;
+                /* En pantallas de 768px o menos, volvemos a 1 columna */
+            }
+        }
+
+
+        @media (max-width: 768px) {
+
+            /* Devolvemos los videos a su estado original (SIN ROTACIÓN) */
+            #video-fondo,
+            #video-frente {
+                /* Usamos las dimensiones normales de la pantalla */
+                width: 100%;
+                height: 100%;
+
+                /* Eliminamos la rotación y solo centramos */
+                transform: translate(-50%, -50%);
+
+                /* 'cover' se asegura de que el video (sin rotar) llene la pantalla del móvil */
+                object-fit: cover;
+            }
+        }
+
+
+        /*filter: contrast(1.3) brightness(1.1) saturate(1.2);*/
+
+
+
+
+
+        .container {
+            width: 90vw;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-height: 100vh;
+            justify-content: center;
+            /* Centra verticalmente */
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+            /* Reducido */
+        }
+
+        .logo {
+            font-size: clamp(2.5rem, 5vw, 3.5rem);
+            /* Ajuste responsivo */
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            margin-bottom: 8px;
+            animation: pulse 2s infinite;
+        }
+
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .tagline {
+            font-size: clamp(1rem, 3vw, 1.2rem);
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #4CAF50;
+            margin-right: 8px;
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            50% {
+                opacity: 1;
+            }
+
+            51%,
+            100% {
+                opacity: 0.3;
+            }
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .logo {
+                font-size: 2.5rem;
+            }
+
+            .tagline {
+                font-size: 1rem;
+            }
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+            overflow: hidden;
+
+            /* --- ¡LÍNEAS AÑADIDAS/MODIFICADAS! --- */
+            display: flex;
+            /* 1. Activa Flexbox para controlar el contenido interno */
+            flex-direction: column;
+            /* 2. Apila los elementos verticalmente */
+            align-items: center;
+            /* 3. Centra todo horizontalmente dentro de la tarjeta */
+        }
+
+        /* Aumentar contraste del contenido */
+        .card h2,
+        .card p,
+        .card input,
+        .card textarea,
+        .card button {
+            filter: contrast(1.2) brightness(1.05);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h2 {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .now-playing {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .song-info {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .song-title {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #FFD700;
+        }
+
+        .song-artist {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .requested-by {
+            font-size: 0.9rem;
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            /* Borde sutil */
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+
+            /* --- LÍNEAS MODIFICADAS/AÑADIDAS --- */
+            color: #ffffff;
+            /* Texto blanco brillante */
+            font-size: 1.05rem;
+            /* Un poco más grande */
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+            /* Sombra para legibilidad */
+
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+            /* Transición para todos los cambios */
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.2);
+
+            /* --- LÍNEAS AÑADIDAS PARA EL EFECTO DE FOCO --- */
+            border-color: #4ECDC4;
+            /* Color del borde a juego con tu paleta */
+            box-shadow: 0 0 15px rgba(78, 205, 196, 0.5);
+            /* Resplandor exterior */
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .queue-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #4ECDC4;
+            transition: transform 0.2s ease;
+        }
+
+        .queue-item:hover {
+            transform: translateX(5px);
+        }
+
+        .queue-item h4 {
+            color: #FFD700;
+            margin-bottom: 5px;
+        }
+
+        .queue-empty {
+            text-align: center;
+            opacity: 0.7;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+        }
+
+        .notification.error {
+            background: linear-gradient(45deg, #f44336, #da190b);
+        }
+
+        .visualizer {
+            height: 60px;
+            display: flex;
+            align-items: end;
+            justify-content: center;
+            gap: 3px;
+            margin: 20px 0;
+        }
+
+        .bar {
+            width: 4px;
+            background: linear-gradient(to top, #4ECDC4, #44A08D);
+            border-radius: 2px;
+            animation: dance 1s infinite ease-in-out;
+        }
+
+        .bar:nth-child(1) {
+            animation-delay: 0.1s;
+            height: 20px;
+        }
+
+        .bar:nth-child(2) {
+            animation-delay: 0.2s;
+            height: 35px;
+        }
+
+        .bar:nth-child(3) {
+            animation-delay: 0.3s;
+            height: 45px;
+        }
+
+        .bar:nth-child(4) {
+            animation-delay: 0.4s;
+            height: 30px;
+        }
+
+        .bar:nth-child(5) {
+            animation-delay: 0.5s;
+            height: 50px;
+        }
+
+        .bar:nth-child(6) {
+            animation-delay: 0.6s;
+            height: 25px;
+        }
+
+        .bar:nth-child(7) {
+            animation-delay: 0.7s;
+            height: 40px;
+        }
+
+        .bar:nth-child(8) {
+            animation-delay: 0.8s;
+            height: 35px;
+        }
+
+        @keyframes dance {
+
+            0%,
+            100% {
+                transform: scaleY(1);
+            }
+
+            50% {
+                transform: scaleY(1.5);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .logo {
+                font-size: 2rem;
+            }
+
+            .card {
+                padding: 20px;
+            }
+        }
+
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .connected {
+            background: rgba(76, 175, 80, 0.2);
+            border: 2px solid #4CAF50;
+            color: #4CAF50;
+        }
+
+        .disconnected {
+            background: rgba(244, 67, 54, 0.2);
+            border: 2px solid #f44336;
+            color: #f44336;
+        }
+
+        .floating-music-notes {
+            position: absolute;
+            font-size: 2rem;
+            color: rgba(255, 255, 255, 0.3);
+            animation: float 6s infinite ease-in-out;
+        }
+
+        .note1 {
+            top: 20%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .note2 {
+            top: 60%;
+            right: 10%;
+            animation-delay: 2s;
+        }
+
+        .note3 {
+            top: 40%;
+            left: 80%;
+            animation-delay: 4s;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px) rotate(0deg);
+                opacity: 0.3;
+            }
+
+            50% {
+                transform: translateY(-20px) rotate(180deg);
+                opacity: 0.6;
+            }
+        }
+
+        /* Estilos para el Modal de Bienvenida */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-content {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-content h1 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            color: #FFD700;
+            /* Dorado para destacar */
+        }
+
+        .modal-content p {
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+
+        /* ================================== */
+        /* ||   CSS AÑADIDO PARA VOLUMEN   || */
+        /* ================================== */
+        .volume-control {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        #volume-slider {
+            width: 60%;
+            cursor: pointer;
+            accent-color: #4ECDC4;
+            /* Para que la barra coincida con tu paleta de colores */
+        }
+
+        #volume-icon {
+            font-size: 1.5rem;
+        }
+
+        .btn.ready {
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% {
+                box-shadow: 0 0 0 0 rgba(78, 205, 196, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(78, 205, 196, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(78, 205, 196, 0);
+            }
+        }
+
+        /* Añade esto a tu CSS */
+
+        .queue-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #4ECDC4;
+            transition: transform 0.3s ease, opacity 0.5s ease;
+            /* Transición suave para el borrado */
+            opacity: 1;
+            /* Estado inicial */
+        }
+
+        /* Clase para la animación de entrada */
+        .queue-item.new-item {
+            transform: translateX(-100%);
+            /* Empieza fuera de la pantalla a la izquierda */
+            opacity: 0;
+        }
+
+        .queue-item:hover {
+            transform: translateX(5px);
+        }
+
+        .queue-item h4 {
+            color: #FFD700;
+            margin-bottom: 5px;
+        }
+
+        .queue-empty {
+            text-align: center;
+            opacity: 0.7;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        /* Reemplaza o añade estas reglas a tu CSS */
+
+        .queue-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #4ECDC4;
+            /* Animación de entrada */
+            animation: slide-in 0.5s ease-out forwards;
+            opacity: 0;
+            /* Empieza invisible para que la animación funcione */
+        }
+
+        /* Animación de entrada */
+        @keyframes slide-in {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .queue-item:hover {
+            transform: scale(1.02);
+            /* Un efecto hover un poco diferente */
+            transition: transform 0.2s;
+        }
+
+        .queue-item h4 {
+            color: #FFD700;
+            margin-bottom: 5px;
+        }
+
+        .queue-empty {
+            text-align: center;
+            opacity: 0.7;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        /* Añade estas reglas a tu bloque <style> */
+
+        #recommendationsList {
+            display: grid;
+            /* Por defecto, usamos UNA SOLA columna para móviles */
+            grid-template-columns: 1fr;
+            gap: 15px;
+            width: 100%;
+        }
+
+        .recommendation-item {
+            background: rgba(0, 0, 0, 0.25);
+            padding: 15px;
+            border-radius: 12px;
+            border-left: 4px solid #FFD700;
+            /* Dorado para destacar */
+            transition: all 0.3s ease;
+        }
+
+        .recommendation-item:hover {
+            transform: scale(1.03);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .recommendation-item h4 {
+            margin: 0 0 5px 0;
+            color: #FFD700;
+        }
+
+        .recommendation-item p {
+            margin: 0 0 10px 0;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .btn-recommend {
+            background: #FFD700;
+            color: #333;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn-recommend:hover {
+            background: #fff;
+        }
+
+        /* --- AÑADE ESTAS DOS NUEVAS REGLAS --- */
+
+        .album-art-container {
+            text-align: center;
+            width: 100%;
+            max-width: 250px;
+            /* Límite de tamaño para la carátula */
+            margin-top: 20px;
+        }
+
+        .album-art-container img {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            object-fit: cover;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: block;
+        }
+
+
+        #request-card {
+            /* Esta propiedad le dice al item que ocupe desde la línea 1 a la -1 (el final) de la rejilla */
+            grid-column: 1 / -1;
+        }
+
+        @media (min-width: 769px) {
+            #recommendationsList {
+                /* En pantallas grandes, volvemos a las 2 columnas */
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* --- ESTILOS PARA EL NUEVO CHAT --- */
+
+        #chat-card {
+            /* Ocupa todo el ancho en la rejilla principal */
+            grid-column: 1 / -1;
+        }
+
+        #chat-window {
+            width: 100%;
+            height: 250px;
+            /* Altura fija, puedes ajustarla */
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            overflow-y: auto;
+            /* ¡Importante! Para poder hacer scroll */
+            display: flex;
+            flex-direction: column;
+            /* Apila los mensajes verticalmente */
+        }
+
+        .chat-message {
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            border-radius: 15px;
+            max-width: 80%;
+            line-height: 1.4;
+        }
+
+        .chat-message .username {
+            font-weight: bold;
+            font-size: 0.9rem;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* Mensajes de los usuarios (alineados a la derecha) */
+        .user-message {
+            background: rgba(255, 255, 255, 0.15);
+            align-self: flex-end;
+            /* ¡Magia! Se alinea a la derecha */
+            text-align: right;
+        }
+
+        .user-message .username {
+            color: #FFD700;
+            /* Dorado para el usuario */
+        }
+
+        /* Mensajes del Bot (alineados a la izquierda) */
+        .bot-message {
+            background: rgba(78, 205, 196, 0.2);
+            /* Tono turquesa */
+            border: 1px solid rgba(78, 205, 196, 0.5);
+            align-self: flex-start;
+            /* Se alinea a la izquierda */
+        }
+
+        .bot-message .username {
+            color: #4ECDC4;
+            /* Turquesa para el bot */
+        }
+
+        #chat-form {
+            display: flex;
+            width: 100%;
+            gap: 10px;
+        }
+
+        #chat-input {
+            flex-grow: 1;
+            /* Ocupa el espacio disponible */
+            /* Reutiliza los estilos de los otros inputs */
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            font-size: 1rem;
+        }
+
+        #chat-form button {
+            /* Reutiliza el estilo del botón principal pero más pequeño */
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            color: white;
+            border: none;
+            padding: 0 20px;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #chat-form button:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Modal de Bienvenida para iniciar audio -->
+    <!-- CÓDIGO NUEVO Y CORREGIDO -->
+    <div id="welcomeModal" class="modal-overlay">
+        <div class="modal-content">
+            <h1>Bienvenido a SONARÍA Radio</h1>
+            <p id="modal-status-text">Para escuchar y participar, conéctate con tu cuenta de Discord.</p>
+            <!-- El ID del botón principal ahora es "connectButton" -->
+            <button id="connectButton" class="btn">🔊 Conectar con Discord</button>
+            <!-- Este botón es para usuarios que ya están logueados -->
+            <button id="closeModalButton" class="btn" style="margin-top: 15px; background: grey; display: none;">Cerrar
+                y
+                Empezar</button>
+        </div>
+    </div>
+
+    <div class="video-background">
+        <video id="video-fondo" autoplay loop muted playsinline>
+            <source src="/videos/fondo_rotated.mp4" type="video/mp4">
+            Tu navegador no soporta el elemento de video.
+        </video>
+        <video id="video-frente" loop muted playsinline>
+            <source src="/videos/frente_rotated.mp4" type="video/mp4">
+        </video>
+
+    </div>
+
+    <div class="floating-music-notes note1">♪</div>
+    <div class="floating-music-notes note2">♫</div>
+    <div class="floating-music-notes note3">♪</div>
+
+    <div class="container">
+        <div class="header">
+            <h1 class="logo">🎵 SONARÍA RADIO</h1>
+            <p class="tagline">
+                <span class="status-indicator"></span>
+                Transmitiendo en vivo las mejores canciones
+            </p>
+        </div>
+
+
+
+        <div class="main-content">
+            <div class="card">
+                <h2>🎧 Ahora Sonando</h2>
+                <div class="now-playing">
+                    <!-- El visualizador de audio no cambia -->
+                    <div class="visualizer">
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                    </div>
+
+                    <!-- Contenedor principal de la información de la canción -->
+                    <div class="song-info">
+                        <!-- 1. Detalles principales (Título, Artista, Pedida por) -->
+                        <div class="song-details">
+                            <div class="song-title" id="currentTitle">Cargando...</div>
+                            <div class="song-artist" id="currentArtist">-</div>
+                            <div class="requested-by" id="requestedBy">-</div>
+                        </div>
+
+                        <!-- 2. Contenedor para la carátula (se mostrará cuando haya una) -->
+                        <div id="album-art-container" class="album-art-container" style="display: none;">
+                            <img id="currentCover" src="" alt="Carátula del álbum">
+                            <p>Carátula del Álbum</p>
+                        </div>
+                    </div>
+                </div>
+
+
+
+
+            </div>
+
+            <div class="card">
+                <h2>🎤 Hacer Petición</h2>
+                <form id="requestForm">
+                    <div class="form-group">
+                        <label for="userName">Tu Nombre:</label>
+                        <input type="text" id="userName" placeholder="Escribe tu nombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="songName">Canción:</label>
+                        <input type="text" id="songName" placeholder="Nombre de la canción y artista" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dedication">Dedicatoria (opcional):</label>
+                        <input type="text" id="dedication" placeholder="Para quien es la canción">
+                    </div>
+                    <div class="form-group">
+                        <label for="message">Mensaje (opcional):</label>
+                        <textarea id="message" rows="3"
+                            placeholder="Mensaje personal para acompañar tu petición"></textarea>
+                    </div>
+                    <button type="submit" class="btn">📻 Enviar Petición</button>
+                </form>
+            </div>
+            <div id="request-card" class="card">
+                <h2>🎤 Hacer Petición</h2>
+                ...
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📋 Cola de Peticiones</h2>
+            <div id="queueList">
+                <div class="queue-empty">No hay peticiones pendientes</div>
+            </div>
+        </div>
+        <!-- Añade este bloque HTML dentro de tu <div class="container"> -->
+
+        <div class="card">
+            <h2>✨ Canciones Recomendadas</h2>
+            <div id="recommendationsList">
+                <!-- Las recomendaciones se cargarán aquí -->
+            </div>
+        </div>
+        <div class="card" id="chat-card">
+            <h2>💬 Chat de la Radio</h2>
+            <div id="chat-window">
+                <!-- Los mensajes del chat se añadirán aquí con JS -->
+                <div class="chat-message bot-message">
+                    <span class="username">Bot SONARÍA:</span>
+                    <p>¡Bienvenidos al chat de la radio! Pide tus canciones en el formulario de arriba y verás mis
+                        notificaciones aquí.</p>
+                </div>
+            </div>
+            <form id="chat-form">
+                <input type="text" id="chat-input" placeholder="Escribe un mensaje..." autocomplete="off" required>
+                <button type="submit">Enviar</button>
+            </form>
+        </div>
+
+
+
+    </div>
+
+    <div class="connection-status connected" id="connectionStatus">
+        🟢 Conectado al servidor
+    </div>
+
+    <script>
+        // ==================================================
+        // PARTE 1: CONFIGURACIÓN Y VARIABLES GLOBALES
+        // ==================================================
+        const BACKEND_URL = "https://e89f21f41784.ngrok-free.app"; // Reemplaza con tu URL
+        const socket = io(BACKEND_URL);
+
+        let currentUser = null;
+        let smoothedAudioLevel = 0;
+        const SMOOTHING_FACTOR = 0.1;
+
+        // ==================================================
+        // PARTE 2: LÓGICA DE INICIALIZACIÓN (DOMContentLoaded)
+        // ==================================================
+        document.addEventListener('DOMContentLoaded', function () {
+            const welcomeModal = document.getElementById('welcomeModal');
+            const enterButton = document.getElementById('enterButton');
+            const videoFrente = document.getElementById('video-frente');
+            const volumeSlider = document.getElementById('volume-slider');
+            const volumeIcon = document.getElementById('volume-icon');
+            const requestForm = document.getElementById('requestForm');
+
+            verificarUsuario();
+
+
+            // El botón "Conectar" abre la ventana de login de Discord
+            connectButton.addEventListener('click', () => {
+                window.open(BACKEND_URL + '/auth/discord', 'discordAuth', 'width=500,height=700');
+            });
+
+            // El botón "Cerrar" oculta el modal y activa el video
+            closeModalButton.addEventListener('click', () => {
+                welcomeModal.style.display = 'none';
+                videoFrente.muted = false; // Le quitamos el silencio
+                videoFrente.play().catch(e => console.warn("La reproducción del video fue bloqueada.", e));
+            });
+
+
+
+
+            // Listener para el formulario de peticiones
+            requestForm.addEventListener('submit', handleRequestFormSubmit);
+
+
+
+
+            window.addEventListener('storage', (event) => {
+                if (event.key === 'sonaria_jwt_token' && event.newValue) {
+                    console.log('¡Token detectado desde otra ventana! Verificando usuario...');
+                    verificarUsuario(); // Vuelve a ejecutar la verificación para actualizar la UI.
+                }
+            });
+
+            const chatForm = document.getElementById('chat-form');
+            const chatInput = document.getElementById('chat-input');
+
+            // 1. Enviar un mensaje al servidor cuando el usuario usa el formulario del chat
+            chatForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const message = chatInput.value.trim();
+                if (message && currentUser) { // Solo permite enviar si hay mensaje y está logueado
+                    socket.emit('nuevo_mensaje_chat', {
+                        texto: message,
+                        usuario: currentUser.username
+                    });
+
+                    //addMessageToChat(message, currentUser.username, false);
+
+
+                    chatInput.value = ''; // Limpiar el campo
+                } else if (!currentUser) {
+                    showNotification('Debes iniciar sesión para chatear.', 'error');
+                }
+            });
+        });
+
+
+
+        // ==================================================
+        // PARTE 3: LISTENERS DE SOCKET.IO
+        // ==================================================.form-group input
+        socket.on('connect', () => {
+            console.log('✅ Conectado al servidor de Socket.IO.');
+
+            loadQueue();
+            loadRecommendations();
+        });
+
+        socket.on('bot_status_update', async (data) => {
+            const enterButton = document.getElementById('enterButton');
+            const modalStatusText = document.getElementById('modal-status-text');
+            if (!enterButton || !modalStatusText) return;
+
+            if (data.is_ready) {
+                modalStatusText.textContent = "¡La radio está en el aire! Haz clic para entrar.";
+                enterButton.disabled = false;
+                enterButton.classList.add('ready');
+
+                if (!peerConnection || peerConnection.connectionState === 'closed') {
+                    console.log("El bot está listo, iniciando conexión WebRTC en segundo plano...");
+                    try {
+                        await iniciarEscuchaWebRTC(audioPlayer);
+                    } catch (error) {
+                        console.error("Error al iniciar la conexión WebRTC en segundo plano:", error);
+                    }
+                }
+            } else {
+                modalStatusText.textContent = "La radio no está transmitiendo. Espera por favor.";
+                enterButton.disabled = true;
+                enterButton.classList.remove('ready');
+            }
+        });
+
+
+        // REEMPLAZA el listener de 'audio_level' con esta versión mejorada
+
+        socket.on("audio_level", function (data) {
+            const videoFrente = document.getElementById('video-frente');
+            if (!videoFrente) return;
+
+            // --- 1. Suavizado del Nivel de Audio ---
+            // En lugar de usar el nivel de audio crudo, lo promediamos con el valor anterior.
+            // Esto crea una transición mucho más fluida y orgánica.
+            const rawAudioLevel = data.level || 0;
+            smoothedAudioLevel = (rawAudioLevel * SMOOTHING_FACTOR) + (smoothedAudioLevel * (1 - SMOOTHING_FACTOR));
+
+            // --- 2. Lógica de Velocidad Simplificada y Más Flexible ---
+            // Mapeamos el nivel de audio suavizado a una velocidad de reproducción.
+            // Usamos una curva para que la respuesta sea más natural.
+            let targetSpeed;
+
+            if (smoothedAudioLevel < 0.25) {
+                // Si el nivel es muy bajo, la velocidad es casi cero (cámara lenta).
+                targetSpeed = 0.2;
+            } else {
+                // Mapeamos el rango de audio (0.15 a 1.0) a un rango de velocidad (0.5 a 4.0).
+                // La fórmula (level - minInput) / (maxInput - minInput) normaliza el nivel.
+                const normalizedLevel = (smoothedAudioLevel - 0.25) / (1.0 - 0.15);
+                // Luego lo escalamos al rango de velocidad deseado.
+                targetSpeed = 0.5 + (normalizedLevel * 3.5);
+            }
+
+            // Limitamos la velocidad a un máximo razonable para evitar problemas.
+            targetSpeed = Math.min(targetSpeed, 4.0);
+
+            // --- 3. Aplicar la Velocidad y Asegurar la Reproducción ---
+            // Asignamos la nueva velocidad suavizada.
+            videoFrente.playbackRate = targetSpeed;
+
+            // Nos aseguramos de que el video esté siempre intentando reproducirse.
+            // Si el navegador lo pausa, en el siguiente frame intentará arrancar de nuevo.
+            // Esto es más simple que la lógica de play/pause anterior.
+            if (videoFrente.paused) {
+                videoFrente.play().catch(e => {
+                    // Es normal que esto falle a veces, especialmente al principio.
+                    // console.warn("Intento de reproducción bloqueado por el navegador.");
+                });
+            }
+
+            // --- 4. (Opcional) Depuración en la Consola ---
+            // Descomenta la siguiente línea para ver los valores en tiempo real en la consola del navegador (F12).
+            console.log(`Raw: ${rawAudioLevel.toFixed(2)}, Smoothed: ${smoothedAudioLevel.toFixed(2)}, Speed: ${targetSpeed.toFixed(2)}`);
+        });
+
+        socket.on("audio_bands", function (bands) {
+            const bars = document.querySelectorAll('.bar');
+            const { bass = 0, mid = 0, high = 0 } = bands;
+            bars.forEach((bar, i) => {
+                const intensity = [bass, mid, high][i % 3];
+                bar.style.height = `${Math.max(10, intensity * 100)}px`;
+            });
+        });
+
+
+        // Dentro de tu etiqueta <script> en index.html
+
+        socket.on('recommendations_updated', function (newRecommendations) {
+            // 1. Añadimos un log muy visible para confirmar que el evento LLEGA.
+            console.log("✅ EVENTO 'recommendations_updated' RECIBIDO:", newRecommendations);
+
+            const recommendationsList = document.getElementById('recommendationsList');
+            if (!recommendationsList) {
+                console.error("Error: No se encontró el elemento #recommendationsList en el DOM.");
+                return;
+            }
+
+            recommendationsList.innerHTML = ''; // Limpiar la lista anterior
+
+            if (!newRecommendations || newRecommendations.length === 0) {
+                recommendationsList.innerHTML = '<p>No hay recomendaciones por ahora.</p>';
+                return;
+            }
+
+            // 2. Usamos la misma lógica de dibujado que en loadRecommendations
+            newRecommendations.slice(0, 5).forEach((rec, index) => { // Mostramos solo las primeras 5
+                const recElement = document.createElement('div');
+                recElement.className = 'recommendation-item';
+
+                // 3. Aplicamos la animación de entrada
+                recElement.style.animationDelay = `${index * 0.1}s`;
+
+                recElement.innerHTML = `
+            <h4>${rec.titulo} - ${rec.artista}</h4>
+            <p><em>${rec.mensaje_corto || ''}</em></p>
+            <button class="btn-recommend" data-song="${rec.titulo} - ${rec.artista}">Pedir esta canción</button>
+        `;
+                recommendationsList.appendChild(recElement);
+            });
+        });
+
+
+        // Asegúrate de que tu listener 'now_playing' se vea así
+
+        socket.on('now_playing', function (data) {
+            // Actualiza los detalles principales
+            document.getElementById('currentTitle').textContent = data.titulo || 'Sin título';
+            document.getElementById('currentArtist').textContent = data.artista || 'Artista desconocido';
+            document.getElementById('requestedBy').textContent = data.usuario ? `Pedida por: ${data.usuario}` : '';
+
+            // Maneja la visibilidad de la carátula
+            const coverContainer = document.getElementById('album-art-container');
+            const coverElement = document.getElementById('currentCover');
+
+            if (data.cover_url) {
+                coverElement.src = data.cover_url;
+                coverContainer.style.display = 'block'; // Hacemos visible el CONTENEDOR
+            } else {
+                coverContainer.style.display = 'none'; // Ocultamos el CONTENEDOR si no hay URL
+            }
+        });
+
+        socket.on('queue_updated', loadQueue);
+
+        // ==================================================
+        // PARTE 4: FUNCIONES AUXILIARES
+        // ==================================================
+
+
+
+        async function verificarUsuario() {
+            const token = localStorage.getItem('sonaria_jwt_token');
+            const userNameInput = document.getElementById('userName');
+            const connectButton = document.getElementById('connectButton');
+            const closeModalButton = document.getElementById('closeModalButton');
+            const modalStatusText = document.getElementById('modal-status-text');
+
+            if (!token) {
+                currentUser = null;
+                userNameInput.placeholder = 'Conéctate para pedir';
+                userNameInput.disabled = true;
+                connectButton.style.display = 'block';
+                closeModalButton.style.display = 'none';
+                modalStatusText.textContent = 'Para escuchar y participar, conéctate con tu cuenta de Discord.';
+                return;
+            }
+            try {
+                // Verificamos el token con el backend
+                const response = await fetch(BACKEND_URL + '/api/auth/verify', { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await response.json();
+
+                if (data.valid) {
+                    currentUser = data.user;
+                    userNameInput.value = currentUser.username;
+                    userNameInput.disabled = true;
+
+                    // --- ¡LÓGICA MEJORADA! ---
+                    // Ahora que el usuario es válido, pedimos la info de la radio
+                    const radioInfoResponse = await fetch(BACKEND_URL + '/api/radio-info');
+                    const radioInfo = await radioInfoResponse.json();
+
+                    connectButton.style.display = 'none';
+                    closeModalButton.style.display = 'block';
+
+                    if (radioInfo.is_ready) {
+                        modalStatusText.textContent = `¡Hola, ${currentUser.username}! La radio está en vivo.`;
+                        closeModalButton.textContent = '🔊 ¡Entrar al canal de voz!';
+                        // Hacemos que el botón abra el enlace al canal de voz
+                        closeModalButton.onclick = () => {
+                            window.open(radioInfo.voice_channel_link, '_blank'); // Abre Discord en una nueva pestaña
+                            document.getElementById('welcomeModal').style.display = 'none'; // Cierra el modal
+                        };
+                    } else {
+                        modalStatusText.textContent = `¡Hola, ${currentUser.username}! La radio no está transmitiendo ahora mismo.`;
+                        closeModalButton.textContent = 'Cerrar';
+                        closeModalButton.onclick = () => {
+                            document.getElementById('welcomeModal').style.display = 'none';
+                        };
+                    }
+
+                } else {
+                    localStorage.removeItem('sonaria_jwt_token');
+                    currentUser = null;
+                    verificarUsuario(); // Vuelve a llamar para resetear la UI
+                }
+            } catch (error) {
+                console.error("Error verificando el usuario:", error);
+                currentUser = null;
+            }
+        }
+
+        // REEMPLAZA tu función handleRequestFormSubmit con esta versión FINAL y CORRECTA
+
+        async function handleRequestFormSubmit(e) {
+            e.preventDefault();
+            if (!currentUser) {
+                showNotification('Necesitas iniciar sesión para hacer una petición.', 'error');
+                return;
+            }
+
+            const songNameInput = document.getElementById('songName');
+            const dedicationInput = document.getElementById('dedication');
+            const messageInput = document.getElementById('message');
+
+            const formData = {
+                usuario: currentUser.username,
+                cancion: songNameInput.value.trim(),
+                dedicatoria: dedicationInput.value.trim(),
+                mensaje: messageInput.value.trim()
+            };
+
+            if (!formData.cancion) {
+                showNotification('La canción es obligatoria.', 'error');
+                return;
+            }
+
+            // 1. Mostramos una notificación genérica de "enviado".
+            showNotification('¡Petición enviada! El bot te confirmará en el chat.', 'success');
+
+            // 2. YA NO generamos el mensaje del bot aquí. Simplemente enviamos los datos.
+            //    El backend se encargará de enviar el mensaje de confirmación al chat.
+            socket.emit('peticion_desde_cliente', formData);
+
+            // 3. Limpiamos el formulario.
+            songNameInput.value = '';
+            dedicationInput.value = '';
+            messageInput.value = '';
+        }
+
+
+
+
+
+
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.classList.add('show'), 100);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // REEMPLAZA tu función loadQueue con esta versión más robusta
+
+        async function loadQueue() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/queue`);
+                if (!response.ok) {
+                    throw new Error(`Error del servidor: ${response.status}`);
+                }
+                const data = await response.json();
+                const queueList = document.getElementById('queueList');
+
+                // Limpiamos completamente la lista actual
+                queueList.innerHTML = '';
+
+                // Unimos las peticiones pendientes y las que ya están listas para sonar
+                const allItems = [...data.ready, ...data.pending];
+
+                if (allItems.length === 0) {
+                    queueList.innerHTML = '<div class="queue-empty">No hay peticiones pendientes</div>';
+                    return;
+                }
+
+                // Tomamos solo los últimos 5 elementos para mostrar
+                const itemsToShow = allItems.slice(0, 5);
+
+                // Volvemos a dibujar la lista con los 5 elementos más recientes
+                itemsToShow.forEach((item, index) => {
+                    const itemElement = document.createElement('div');
+                    itemElement.className = 'queue-item';
+
+                    // Construimos el contenido del elemento
+                    itemElement.innerHTML = `
+                <h4>${item.title}</h4>
+                <p>Pedida por: ${item.user}</p>
+                ${item.dedication ? `<p style="font-style: italic; opacity: 0.8;">Para: ${item.dedication.para}</p>` : ''}
+            `;
+
+                    // Aplicamos un pequeño retraso a la animación para un efecto en cascada
+                    itemElement.style.animationDelay = `${index * 0.1}s`;
+
+                    queueList.appendChild(itemElement);
+                });
+
+            } catch (error) {
+                console.error('Error cargando cola:', error);
+                const queueList = document.getElementById('queueList');
+                queueList.innerHTML = '<div class="queue-empty">Error al cargar la cola.</div>';
+            }
+        }
+
+
+        async function loadRecommendations() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/recommendations`);
+                const recommendations = await response.json();
+                const recommendationsList = document.getElementById('recommendationsList');
+
+                recommendationsList.innerHTML = ''; // Limpiar la lista
+
+                if (recommendations.length === 0) {
+                    recommendationsList.innerHTML = '<p>No hay recomendaciones por ahora.</p>';
+                    return;
+                }
+
+                recommendations.forEach(rec => {
+                    const recElement = document.createElement('div');
+                    recElement.className = 'recommendation-item';
+                    recElement.innerHTML = `
+                <h4>${rec.titulo} - ${rec.artista}</h4>
+                <p><em>${rec.mensaje_corto || ''}</em></p>
+                <button class="btn-recommend" data-song="${rec.titulo} - ${rec.artista}">Pedir esta canción</button>
+            `;
+                    recommendationsList.appendChild(recElement);
+                });
+
+            } catch (error) {
+                console.error("Error cargando recomendaciones:", error);
+            }
+        }
+
+        // Añade un event listener para los botones de "Pedir"
+        document.getElementById('recommendationsList').addEventListener('click', function (e) {
+            if (e.target && e.target.classList.contains('btn-recommend')) {
+                const songName = e.target.getAttribute('data-song');
+                document.getElementById('songName').value = songName; // Rellena el campo de petición
+                // Opcional: hacer scroll hasta el formulario de petición
+                document.getElementById('requestForm').scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+
+
+        // --- LÓGICA PARA EL CHAT ---
+
+
+        // 2. Escuchar los mensajes que llegan del servidor y mostrarlos
+        socket.on('mensaje_a_cliente', function (data) {
+            addMessageToChat(data.texto, data.usuario, data.esBot);
+        });
+
+        // 3. Función para añadir un mensaje a la ventana del chat
+        function addMessageToChat(texto, usuario, esBot = false) {
+            const chatWindow = document.getElementById('chat-window');
+            const messageElement = document.createElement('div');
+
+            // Asigna la clase correcta para el estilo (bot o usuario)
+            messageElement.classList.add('chat-message', esBot ? 'bot-message' : 'user-message');
+
+            messageElement.innerHTML = `
+        <span class="username">${usuario}:</span>
+        <p>${texto}</p>`;
+
+            chatWindow.appendChild(messageElement);
+
+            // Hacer scroll automático hacia el último mensaje
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+
+
+
+
+    </script>
+
+</body>
+
+</html>

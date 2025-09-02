@@ -1,0 +1,333 @@
+[
+    {
+        "titulo": "Color Esperanza",
+        "artista": "Diego Torres",
+        "genero": "Pop Latino",
+        "temas": [
+            "optimismo",
+            "superacion",
+            "resiliencia",
+            "alegria"
+        ],
+        "mensaje_corto": "Un himno para recordarnos que siempre hay un futuro mejor."
+    },
+    {
+        "titulo": "Heal the World",
+        "artista": "Michael Jackson",
+        "genero": "Pop",
+        "temas": [
+            "responsabilidad_social",
+            "comunidad",
+            "empatia",
+            "paz",
+            "cambio"
+        ],
+        "mensaje_corto": "Un llamado a la acción para hacer del mundo un lugar mejor para todos."
+    },
+    {
+        "titulo": "Sober",
+        "artista": "Tool",
+        "genero": "Rock Alternativo",
+        "temas": [
+            "prevencion_sustancias",
+            "lucha",
+            "reflexion",
+            "autocontrol"
+        ],
+        "mensaje_corto": "Una poderosa metáfora sobre la lucha contra la adicción y la búsqueda de claridad."
+    },
+    {
+        "titulo": "Imagine",
+        "artista": "John Lennon",
+        "genero": "Pop Clásico",
+        "temas": [
+            "paz",
+            "comunidad",
+            "responsabilidad_social",
+            "empatia"
+        ],
+        "mensaje_corto": "Una visión de un mundo unido, sin barreras y en paz."
+    },
+    {
+        "titulo": "Unstoppable",
+        "artista": "Sia",
+        "genero": "Pop",
+        "temas": [
+            "fortaleza",
+            "empoderamiento",
+            "resiliencia",
+            "autoestima"
+        ],
+        "mensaje_corto": "Una canción para sentirte invencible y lleno de confianza."
+    },
+    {
+        "titulo": "Man in the Mirror",
+        "artista": "Michael Jackson",
+        "genero": "Pop/R&B",
+        "temas": [
+            "cambio",
+            "responsabilidad_social",
+            "autocontrol",
+            "reflexion"
+        ],
+        "mensaje_corto": "Para cambiar el mundo, primero debes empezar por ti mismo."
+    },
+    {
+        "titulo": "Breaking the Habit",
+        "artista": "Linkin Park",
+        "genero": "Rock Alternativo",
+        "temas": [
+            "prevencion_sustancias",
+            "cambio",
+            "lucha",
+            "superacion",
+            "autocontrol"
+        ],
+        "mensaje_corto": "Describe la dolorosa pero necesaria lucha por romper un ciclo destructivo."
+    },
+    {
+        "titulo": "Latinoamérica",
+        "artista": "Calle 13",
+        "genero": "Rap/Alternativo",
+        "temas": [
+            "identidad",
+            "fortaleza",
+            "resiliencia",
+            "comunidad"
+        ],
+        "mensaje_corto": "Un poderoso manifiesto sobre la identidad y la fuerza de un pueblo."
+    },
+    {
+        "titulo": "Beautiful",
+        "artista": "Christina Aguilera",
+        "genero": "Pop",
+        "temas": [
+            "autoestima",
+            "aceptacion",
+            "resiliencia",
+            "empatia"
+        ],
+        "mensaje_corto": "Un poderoso recordatorio de que eres valioso/a sin importar lo que digan los demás."
+    },
+    {
+        "titulo": "Gimme Tha Power",
+        "artista": "Molotov",
+        "genero": "Rock Latino",
+        "temas": [
+            "responsabilidad_social",
+            "cambio",
+            "conciencia",
+            "lucha"
+        ],
+        "mensaje_corto": "Un llamado a la conciencia social y a exigir un cambio."
+    },
+    {
+        "titulo": "The A Team",
+        "artista": "Ed Sheeran",
+        "genero": "Folk/Pop",
+        "temas": [
+            "prevencion_sustancias",
+            "empatia",
+            "conciencia",
+            "reflexion"
+        ],
+        "mensaje_corto": "Una conmovedora historia que visibiliza las duras realidades de la adicción."
+    },
+    {
+        "titulo": "One",
+        "artista": "U2",
+        "genero": "Rock Alternativo",
+        "temas": [
+            "comunidad",
+            "empatia",
+            "relaciones",
+            "resiliencia",
+            "responsabilidad_social"
+        ],
+        "mensaje_corto": "Aunque seamos diferentes, debemos cuidarnos y apoyarnos mutuamente."
+    },
+    {
+        "titulo": "Redemption Song",
+        "artista": "Bob Marley & The Wailers",
+        "genero": "Reggae/Folk",
+        "temas": [
+            "libertad",
+            "conciencia",
+            "cambio",
+            "empoderamiento",
+            "autocontrol"
+        ],
+        "mensaje_corto": "Una llamada a liberarnos de la esclavitud mental y tomar el control de nuestro destino."
+    },
+    {
+        "titulo": "Otherside",
+        "artista": "Red Hot Chili Peppers",
+        "genero": "Rock Alternativo",
+        "temas": [
+            "prevencion_sustancias",
+            "lucha",
+            "nostalgia",
+            "reflexion"
+        ],
+        "mensaje_corto": "Relata la lucha constante y solitaria contra la adicción."
+    },
+    {
+        "titulo": "Where Is The Love?",
+        "artista": "The Black Eyed Peas",
+        "genero": "Hip-Hop/Pop",
+        "temas": [
+            "responsabilidad_social",
+            "paz",
+            "empatia",
+            "comunidad",
+            "conciencia"
+        ],
+        "mensaje_corto": "Una pregunta al mundo sobre la falta de amor, paz y entendimiento."
+    },
+    {
+        "titulo": "Viva la Vida",
+        "artista": "Coldplay",
+        "genero": "Rock Alternativo",
+        "temas": [
+            "superacion",
+            "reflexion",
+            "cambio",
+            "autocontrol"
+        ],
+        "mensaje_corto": "Una canción sobre tomar las riendas de tu propio destino."
+    },
+    {
+        "titulo": "Bonito",
+        "artista": "Jarabe de Palo",
+        "genero": "Rock Latino",
+        "temas": [
+            "optimismo",
+            "alegria",
+            "gratitud"
+        ],
+        "mensaje_corto": "Para recordarnos apreciar las pequeñas cosas de la vida."
+    },
+    {
+        "titulo": "Happy",
+        "artista": "Pharrell Williams",
+        "genero": "Pop/Funk",
+        "temas": [
+            "alegria",
+            "optimismo",
+            "gratitud"
+        ],
+        "mensaje_corto": "Imposible no sentirse feliz al escucharla. ¡Contagiosa!"
+    },
+    {
+        "titulo": "Eye of the Tiger",
+        "artista": "Survivor",
+        "genero": "Rock",
+        "temas": [
+            "superacion",
+            "lucha",
+            "determinacion",
+            "fortaleza"
+        ],
+        "mensaje_corto": "Un clásico motivacional que inspira a levantarse y seguir luchando."
+    },
+    {
+        "titulo": "Stronger (What Doesn’t Kill You)",
+        "artista": "Kelly Clarkson",
+        "genero": "Pop/Rock",
+        "temas": [
+            "resiliencia",
+            "empoderamiento",
+            "autoestima"
+        ],
+        "mensaje_corto": "Lo que no te mata te hace más fuerte: un himno de empoderamiento."
+    },
+    {
+        "titulo": "Rise Up",
+        "artista": "Andra Day",
+        "genero": "Soul/Pop",
+        "temas": [
+            "esperanza",
+            "fortaleza",
+            "superacion",
+            "union"
+        ],
+        "mensaje_corto": "Una poderosa balada que invita a levantarse y no rendirse."
+    },
+    {
+        "titulo": "Don’t Stop Believin’",
+        "artista": "Journey",
+        "genero": "Rock Clásico",
+        "temas": [
+            "esperanza",
+            "sueños",
+            "perseverancia"
+        ],
+        "mensaje_corto": "Un himno eterno sobre seguir creyendo, pase lo que pase."
+    },
+    {
+        "titulo": "Fight Song",
+        "artista": "Rachel Platten",
+        "genero": "Pop",
+        "temas": [
+            "empoderamiento",
+            "fortaleza",
+            "resiliencia"
+        ],
+        "mensaje_corto": "Un grito de fuerza personal para luchar y no rendirse jamás."
+    },
+    {
+        "titulo": "Shake It Out",
+        "artista": "Florence + The Machine",
+        "genero": "Indie Rock",
+        "temas": [
+            "renovacion",
+            "superacion",
+            "cambio"
+        ],
+        "mensaje_corto": "Una catarsis musical para soltar el pasado y avanzar."
+    },
+    {
+        "titulo": "The Climb",
+        "artista": "Miley Cyrus",
+        "genero": "Pop",
+        "temas": [
+            "perseverancia",
+            "esperanza",
+            "superacion"
+        ],
+        "mensaje_corto": "La vida es una subida constante, lo importante es seguir escalando."
+    },
+    {
+        "titulo": "I Will Survive",
+        "artista": "Gloria Gaynor",
+        "genero": "Disco/Pop",
+        "temas": [
+            "resiliencia",
+            "empoderamiento",
+            "autoestima"
+        ],
+        "mensaje_corto": "Un clásico atemporal sobre encontrar fuerza después de la adversidad."
+    },
+    {
+        "titulo": "Heroes",
+        "artista": "David Bowie",
+        "genero": "Rock",
+        "temas": [
+            "esperanza",
+            "amor",
+            "superacion"
+        ],
+        "mensaje_corto": "Nos recuerda que todos podemos ser héroes, aunque sea por un día."
+    },
+    {
+        "titulo": "Titanium",
+        "artista": "David Guetta ft. Sia",
+        "genero": "Electropop",
+        "temas": [
+            "fortaleza",
+            "resiliencia",
+            "empoderamiento"
+        ],
+        "mensaje_corto": "Una metáfora poderosa de ser inquebrantable frente a la adversidad."
+    }
+]
