@@ -42,6 +42,7 @@ import functools
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import eventlet
+import threading
 
 
 # Configurar logging
@@ -174,7 +175,7 @@ INTERVALO_LIMPIEZA_SEGUNDOS = 3600  # 1 hora (60 * 60)
 cancion_actual = {"titulo": None, "artista": None, "usuario": None}
 usuarios_conectados = set()
 canal_radio_id = None  # ID del canal de voz de la radio
-loop = asyncio.get_event_loop()
+
 # Variable global para el nivel de audio
 audio_level = 0.0
 radio_activa = False
@@ -1454,6 +1455,7 @@ def handle_disconnect():
     """
     sid = request.sid
     logger.info(f"Cliente desconectado: {sid}")
+    loop = asyncio.get_running_loop()
 
     # Limpiar conexión WebRTC si existe
     if sid in peer_connections:
@@ -1476,12 +1478,6 @@ def run_flask():
 
 
 # --- INICIO DEL SISTEMA ---
-# REEMPLAZA todo el bloque if __name__ == "__main__" con esto:
-
-
-async def run_bot():
-    """Una función wrapper para iniciar el bot."""
-    await bot.start(DISCORD_TOKEN)
 
 
 def run_server():
@@ -1490,18 +1486,51 @@ def run_server():
     socketio.run(flask_app, host="0.0.0.0", port=8080)
 
 
-if __name__ == "__main__":
-    logger.info("🤖 Iniciando SONARÍA Bot y Servidor Web...")
+bot_thread = None
+is_bot_running = False
 
-    # 1. Obtenemos el loop de asyncio
-    loop = asyncio.get_event_loop()
 
-    # 2. Creamos una tarea para que el bot de Discord se ejecute en segundo plano
-    loop.create_task(run_bot())
+def run_bot():
+    """
+    Función que se ejecutará en un hilo separado para el bot de Discord.
+    Crea un nuevo event loop específico para este hilo.
+    """
+    global is_bot_running
+    try:
+        # Crea un nuevo loop para este hilo y lo establece como el actual
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-    # 3. Ejecutamos el servidor web en el hilo principal usando eventlet
-    # Lo envolvemos en run_in_executor para no bloquear el loop de asyncio
-    loop.run_in_executor(None, run_server)
+        # Ahora podemos iniciar el bot usando este loop
+        loop.run_until_complete(bot.start(DISCORD_TOKEN))
+    except Exception as e:
+        logger.error(
+            f"❌ Error catastrófico en el hilo del bot de Discord: {e}", exc_info=True
+        )
+    finally:
+        is_bot_running = False
 
-    # 4. Hacemos que el loop de asyncio corra para siempre
-    loop.run_forever()
+
+@socketio.on("connect")
+def handle_initial_connect():
+    """
+    Se dispara cuando el primer cliente web se conecta.
+    Usamos esto como señal para iniciar el bot de Discord en segundo plano.
+    """
+    global bot_thread, is_bot_running
+
+    # El lock previene que múltiples conexiones intenten iniciar el bot al mismo tiempo
+    with threading.Lock():
+        if not is_bot_running:
+            logger.info(
+                "🤖 Primer cliente conectado. Iniciando el bot de Discord en un hilo secundario..."
+            )
+            is_bot_running = True
+            bot_thread = threading.Thread(target=run_bot)
+            bot_thread.daemon = True  # Permite que el programa principal termine aunque el hilo siga corriendo
+            bot_thread.start()
+
+    # Emitir el estado actual al cliente que se acaba de conectar
+    sid = request.sid
+    emit("bot_status_update", {"is_ready": radio_activa}, room=sid)
+    emit("now_playing", cancion_actual, room=sid)
