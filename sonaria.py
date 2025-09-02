@@ -1490,47 +1490,47 @@ bot_thread = None
 is_bot_running = False
 
 
-def run_bot():
+# --- INICIO DEL SISTEMA (VERSIÓN FINAL Y CORRECTA PARA PRODUCCIÓN) ---
+
+
+def run_bot_in_thread():
     """
-    Función que se ejecutará en un hilo separado para el bot de Discord.
-    Crea un nuevo event loop específico para este hilo.
+    Esta función se ejecutará en un hilo separado.
+    Crea un nuevo event loop de asyncio exclusivo para el bot de Discord,
+    evitando conflictos con el servidor web.
     """
-    global is_bot_running
+    logger.info("🤖 Iniciando hilo para el bot de Discord...")
     try:
-        # Crea un nuevo loop para este hilo y lo establece como el actual
+        # 1. Crear un nuevo loop de asyncio para este hilo
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        # Ahora podemos iniciar el bot usando este loop
+        # 2. Iniciar el bot de Discord. Esta llamada es bloqueante y mantendrá el hilo vivo.
+        logger.info("🔌 Conectando el bot a Discord...")
         loop.run_until_complete(bot.start(DISCORD_TOKEN))
+
     except Exception as e:
+        # Captura cualquier error catastrófico que pueda ocurrir en el bot
         logger.error(
-            f"❌ Error catastrófico en el hilo del bot de Discord: {e}", exc_info=True
+            f"❌ Error fatal en el hilo del bot de Discord: {e}", exc_info=True
         )
     finally:
-        is_bot_running = False
+        logger.info("🛑 El hilo del bot de Discord ha finalizado.")
 
 
-@socketio.on("connect")
-def handle_initial_connect():
-    """
-    Se dispara cuando el primer cliente web se conecta.
-    Usamos esto como señal para iniciar el bot de Discord en segundo plano.
-    """
-    global bot_thread, is_bot_running
+# ==============================================================================
+# || ESTA ES LA PARTE CLAVE QUE RESTAURA LA LÓGICA DE INICIO INMEDIATO         ||
+# ==============================================================================
+# Cuando Gunicorn carga este archivo para encontrar "flask_app", este código
+# en el nivel superior se ejecuta automáticamente.
+logger.info(
+    "🚀 Módulo sonaria.py cargado. Iniciando el bot de Discord en segundo plano..."
+)
 
-    # El lock previene que múltiples conexiones intenten iniciar el bot al mismo tiempo
-    with threading.Lock():
-        if not is_bot_running:
-            logger.info(
-                "🤖 Primer cliente conectado. Iniciando el bot de Discord en un hilo secundario..."
-            )
-            is_bot_running = True
-            bot_thread = threading.Thread(target=run_bot)
-            bot_thread.daemon = True  # Permite que el programa principal termine aunque el hilo siga corriendo
-            bot_thread.start()
+# Creamos e iniciamos el hilo del bot.
+# `daemon=True` asegura que el hilo se cierre si el programa principal (Gunicorn) termina.
+bot_thread = threading.Thread(target=run_bot_in_thread, daemon=True)
+bot_thread.start()
 
-    # Emitir el estado actual al cliente que se acaba de conectar
-    sid = request.sid
-    emit("bot_status_update", {"is_ready": radio_activa}, room=sid)
-    emit("now_playing", cancion_actual, room=sid)
+# El código anterior inicia el bot. A partir de aquí, Gunicorn continuará
+# y servirá la aplicación Flask (`flask_app`) en el hilo principal.
