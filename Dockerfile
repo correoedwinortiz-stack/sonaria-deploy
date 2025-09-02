@@ -21,7 +21,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Instalar dependencias de Python
-RUN pip3 install --no-cache-dir -r requirements_fixed.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copiar el código de la aplicación
 COPY . .
