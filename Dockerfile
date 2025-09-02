@@ -1,37 +1,57 @@
-FROM ubuntu:22.04
+# =================================================================
+# Fase 1: Build - Instalar dependencias y compilar si es necesario
+# =================================================================
+# Usamos una imagen completa de Python 3.12 para tener las herramientas de compilación
+FROM python:3.12-slim as builder
 
-# Evitar prompts interactivos durante la instalación
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Instalar dependencias del sistema
+# Instalar dependencias del sistema necesarias para algunas librerías de Python
+# ffmpeg es para el procesamiento de audio/video
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-dev \
-    python3-pyaudio \
-    ffmpeg \
-    portaudio19-dev \
     build-essential \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Crear directorio de trabajo
+# Establecer el directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos de dependencias
+# Instalar las dependencias de Python en un entorno virtual
+# Esto es una buena práctica para aislar las dependencias
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copiar solo el archivo de requerimientos primero para aprovechar el cache de Docker
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar dependencias de Python
-RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Copiar el código de la aplicación
+# =================================================================
+# Fase 2: Final - Crear la imagen final ligera
+# =================================================================
+# Usamos una imagen "slim" que es mucho más pequeña
+FROM python:3.12-slim
+
+# Establecer el directorio de trabajo
+WORKDIR /app
+
+# Copiar el entorno virtual con las dependencias ya instaladas desde la fase 'builder'
+COPY --from=builder /opt/venv /opt/venv
+
+# Copiar las dependencias del sistema (ffmpeg) desde la fase 'builder'
+COPY --from=builder /usr/bin/ffmpeg /usr/bin/ffmpeg
+
+# Activar el entorno virtual para los comandos siguientes
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copiar el resto del código de la aplicación
 COPY . .
 
-# Crear directorios necesarios
+# Crear los directorios que tu aplicación necesita
 RUN mkdir -p jingles downloads ambientes videos
 
-# Exponer el puerto
+# Exponer el puerto en el que corre tu aplicación Flask/SocketIO
 EXPOSE 8080
 
-# Comando por defecto
-CMD ["python", "sonaria.py"]
-
+# Comando para ejecutar la aplicación
+# Usamos gunicorn para un servidor de producción más robusto en lugar del de desarrollo de Flask
+# El worker de eventlet es crucial para que Socket.IO funcione correctamente
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:8080", "sonaria:flask_app"]
