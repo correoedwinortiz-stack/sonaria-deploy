@@ -1,11 +1,9 @@
 # =================================================================
 # Fase 1: Build - Instalar dependencias y compilar si es necesario
 # =================================================================
-# Usamos una imagen completa de Python 3.12 para tener las herramientas de compilación
 FROM python:3.12-slim as builder
 
-# Instalar dependencias del sistema necesarias para algunas librerías de Python
-# ¡AÑADIMOS portaudio19-dev AQUÍ!
+# Instalar dependencias del sistema necesarias
 RUN apt-get update && apt-get install -y \
     build-essential \
     ffmpeg \
@@ -27,7 +25,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # =================================================================
 # Fase 2: Final - Crear la imagen final ligera
 # =================================================================
-# Usamos una imagen "slim" que es mucho más pequeña
 FROM python:3.12-slim
 
 # Establecer el directorio de trabajo
@@ -36,8 +33,17 @@ WORKDIR /app
 # Copiar el entorno virtual con las dependencias ya instaladas desde la fase 'builder'
 COPY --from=builder /opt/venv /opt/venv
 
-# Copiar las dependencias del sistema (ffmpeg) desde la fase 'builder'
+# --- ¡CORRECCIÓN IMPORTANTE AQUÍ! ---
+# Copiar el ejecutable de ffmpeg Y sus librerías compartidas necesarias.
 COPY --from=builder /usr/bin/ffmpeg /usr/bin/ffmpeg
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libavdevice.so.* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libavfilter.so.* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libavformat.so.* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libavcodec.so.* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libswresample.so.* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libswscale.so.* /usr/lib/x86_64-linux-gnu/
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libavutil.so.* /usr/lib/x86_64-linux-gnu/
+# Es posible que necesites más, pero estas son las principales.
 
 # Activar el entorno virtual para los comandos siguientes
 ENV PATH="/opt/venv/bin:$PATH"
@@ -48,8 +54,8 @@ COPY . .
 # Crear los directorios que tu aplicación necesita
 RUN mkdir -p jingles downloads ambientes videos
 
-# Exponer el puerto en el que corre tu aplicación Flask/SocketIO
+# Exponer el puerto
 EXPOSE 8080
 
-# Comando para ejecutar la aplicación
+# Comando para ejecutar la aplicación con precarga
 CMD ["gunicorn", "--preload", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:8080", "sonaria:flask_app"]
