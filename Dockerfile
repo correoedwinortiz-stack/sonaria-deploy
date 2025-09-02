@@ -5,17 +5,17 @@
 FROM python:3.12-slim as builder
 
 # Instalar dependencias del sistema necesarias para algunas librerías de Python
-# ffmpeg es para el procesamiento de audio/video
+# ¡AÑADIMOS portaudio19-dev AQUÍ!
 RUN apt-get update && apt-get install -y \
     build-essential \
     ffmpeg \
+    portaudio19-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Establecer el directorio de trabajo
 WORKDIR /app
 
 # Instalar las dependencias de Python en un entorno virtual
-# Esto es una buena práctica para aislar las dependencias
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -52,6 +52,4 @@ RUN mkdir -p jingles downloads ambientes videos
 EXPOSE 8080
 
 # Comando para ejecutar la aplicación
-# Usamos gunicorn para un servidor de producción más robusto en lugar del de desarrollo de Flask
-# El worker de eventlet es crucial para que Socket.IO funcione correctamente
 CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:8080", "sonaria:flask_app"]
