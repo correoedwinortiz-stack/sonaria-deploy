@@ -52,4 +52,4 @@ RUN mkdir -p jingles downloads ambientes videos
 EXPOSE 8080
 
 # Comando para ejecutar la aplicación
-CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:8080", "sonaria:flask_app"]
+CMD ["gunicorn", "--preload", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:8080", "sonaria:flask_app"]
