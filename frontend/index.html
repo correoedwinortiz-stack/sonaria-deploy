@@ -1039,8 +1039,7 @@
         // ==================================================
         // PARTE 1: CONFIGURACIÓN Y VARIABLES GLOBALES
         // ==================================================
-        const BACKEND_URL = "https://e89f21f41784.ngrok-free.app"; // Reemplaza con tu URL
-        const socket = io(BACKEND_URL);
+        const socket = io();
 
         let currentUser = null;
         let smoothedAudioLevel = 0;
