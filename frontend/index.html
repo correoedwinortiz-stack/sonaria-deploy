@@ -1039,7 +1039,10 @@
         // ==================================================
         // PARTE 1: CONFIGURACIÓN Y VARIABLES GLOBALES
         // ==================================================
-        const socket = io();
+        // --- LÍNEAS CORREGIDAS ---
+        const BACKEND_URL = "http://35.238.0.201:8080";
+        const socket = io(BACKEND_URL);
+
 
         let currentUser = null;
         let smoothedAudioLevel = 0;
