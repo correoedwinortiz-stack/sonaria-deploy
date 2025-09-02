@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copiar archivos de dependencias
-COPY requirements_fixed.txt .
+COPY requirements.txt .
 
 # Instalar dependencias de Python
 RUN pip3 install --no-cache-dir -r requirements_fixed.txt
