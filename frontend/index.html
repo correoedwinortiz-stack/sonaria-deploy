@@ -1264,7 +1264,6 @@
         });
 
 
-        // Dentro de tu etiqueta <script> en index.html
 
         socket.on('recommendations_updated', function (newRecommendations) {
             // 1. Añadimos un log muy visible para confirmar que el evento LLEGA.
@@ -1301,7 +1300,6 @@
         });
 
 
-        // Asegúrate de que tu listener 'now_playing' se vea así
 
         socket.on('now_playing', function (data) {
             // Actualiza los detalles principales
@@ -1390,7 +1388,6 @@
             }
         }
 
-        // REEMPLAZA tu función handleRequestFormSubmit con esta versión FINAL y CORRECTA
 
         async function handleRequestFormSubmit(e) {
             e.preventDefault();

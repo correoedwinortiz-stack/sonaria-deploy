@@ -786,6 +786,78 @@ async def reproducir_playlist(ctx):
         emit_with_context("queue_updated", {})
 
 
+def obtener_recomendaciones_spotify_mejoradas(artista_base, titulo_base):
+    """
+    Obtiene recomendaciones de canciones similares a una canción base,
+    usando el motor de recomendaciones de Spotify y sus características de audio.
+    """
+    if not sp:
+        logger.warning("Cliente de Spotify no está disponible.")
+        return []
+
+    try:
+        # Paso 1: Encontrar la canción y artista para obtener los IDs
+        search_query = f"track:{titulo_base} artist:{artista_base}"
+        results = sp.search(q=search_query, type="track", limit=1)
+
+        if not results["tracks"]["items"]:
+            logger.info(
+                f"Canción '{titulo_base}' de '{artista_base}' no encontrada en Spotify."
+            )
+            return []
+
+        track_id = results["tracks"]["items"][0]["id"]
+
+        # Paso 2: Obtener las características de audio de la canción base
+        audio_features = sp.audio_features(tracks=[track_id])
+        if not audio_features or not audio_features[0]:
+            logger.info(
+                "No se pudieron obtener las características de audio para la canción."
+            )
+            return []
+
+        # Extraemos las características más relevantes para música bailable/latina
+        danceability = audio_features[0]["danceability"]
+        energy = audio_features[0]["energy"]
+        valence = audio_features[0]["valence"]
+
+        # Paso 3: Usar el endpoint de recomendaciones de Spotify con los parámetros correctos
+        # Incluimos los IDs de la canción y el artista como "seeds" (semillas)
+        recomendaciones = sp.recommendations(
+            seed_tracks=[track_id],
+            seed_artists=[results["tracks"]["items"][0]["artists"][0]["id"]],
+            # Definimos un "mercado" (país) para priorizar música de esa región.
+            # Puedes usar 'ES' para España, 'MX' para México, 'CO' para Colombia, etc.
+            market="CO",
+            limit=10,
+            # También podemos "orientar" las recomendaciones hacia las características de audio
+            target_danceability=danceability,
+            target_energy=energy,
+            target_valence=valence,
+        )
+
+        lista_formateada = []
+        for track in recomendaciones["tracks"]:
+            lista_formateada.append(
+                {
+                    "titulo": track["name"],
+                    "artista": track["artists"][0]["name"],
+                    "mensaje_corto": f"Sugerencia: Porque te gusta {titulo_base}",
+                    "cover_url": (
+                        track["album"]["images"][0]["url"]
+                        if track["album"]["images"]
+                        else None
+                    ),
+                }
+            )
+
+        return lista_formateada
+
+    except Exception as e:
+        logger.error(f"Error al obtener recomendaciones de Spotify: {e}", exc_info=True)
+        return []
+
+
 # ==============================================================================
 # ||      TAREA procesar_cola_canciones CON DESCARGA NO BLOQUEANTE           ||
 # ==============================================================================
@@ -877,7 +949,10 @@ async def procesar_cola_canciones():
         try:
             loop = asyncio.get_running_loop()
             nuevas_sugerencias = await loop.run_in_executor(
-                None, obtener_recomendaciones_deezer, artista_base
+                None,
+                obtener_recomendaciones_spotify_mejoradas,
+                artista_base,
+                titulo_base,
             )
             if nuevas_sugerencias:
                 global recomendaciones_actuales
@@ -1043,8 +1118,39 @@ async def on_ready():
         f"✅ ¡Conectado como {bot_username}!"
     )  # Añadimos un logger para consistencia
 
-    # 🚀 Inicia la tarea que procesa los comandos de la web
+    # --- Lógica para la conexión automática al canal de voz ---
+    try:
+        guild = bot.get_guild(int(os.getenv("DISCORD_GUILD_ID")))
+        if guild is None:
+            logger.error(
+                "❌ Servidor no encontrado. Verifica el DISCORD_GUILD_ID en .env"
+            )
+            return
 
+        voice_channel = guild.get_channel(int(os.getenv("CANAL_DE_VOZ_ID")))
+        if voice_channel is None or not isinstance(voice_channel, discord.VoiceChannel):
+            logger.error(
+                "❌ Canal de voz no encontrado o el ID no corresponde a un canal de voz."
+            )
+            return
+
+        # Conecta el bot al canal de voz si no está ya conectado
+        if guild.voice_client is None:
+            await voice_channel.connect()
+            logger.info(
+                f"🎤 Bot conectado automáticamente al canal de voz: {voice_channel.name}"
+            )
+        else:
+            logger.info(
+                "🎤 Bot ya está en un canal de voz. No se requiere conexión automática."
+            )
+
+    except Exception as e:
+        logger.error(
+            f"Error en la conexión automática al canal de voz: {e}", exc_info=True
+        )
+
+    # 🚀 Inicia la tarea que procesa los comandos de la web
     bot.loop.create_task(process_web_commands())
 
     if not procesar_cola_canciones.is_running():
@@ -1323,7 +1429,7 @@ def handle_song_request_from_client(data):
     )
 
     # Notificar a todos que la cola de peticiones visual se actualizó
-    emit_with_context("queue_updated")
+    emit_with_context("queue_updated", {})
 
     # Enviar mensaje de CONFIRMACIÓN del Bot al chat
     try:
