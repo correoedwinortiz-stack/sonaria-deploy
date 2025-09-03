@@ -683,12 +683,6 @@ async def radio_manager(ctx):
         logger.error(f"❌ Error al intentar poner música de fondo: {e}")
 
 
-# REEMPLAZA tu reproducir_playlist con esta versión a prueba de fallos
-
-
-# REEMPLAZA tu reproducir_playlist con esta versión simplificada
-
-
 # python
 async def reproducir_playlist(ctx):
     global playlist_en_curso, ultimo_jingle_relleno, cancion_actual
@@ -718,11 +712,7 @@ async def reproducir_playlist(ctx):
                 if " - " in cancion_actual_obj["titulo"]
                 else "Artista Desconocido"
             ),
-            "usuario": (
-                cancion_actual_obj["autor"].display_name
-                if hasattr(cancion_actual_obj["autor"], "display_name")
-                else str(cancion_actual_obj["autor"])
-            ),
+            "usuario": cancion_actual_obj["autor"],  # Ahora es directamente el string
             "cover_url": cancion_actual_obj.get("cover_url"),
         }
         socketio.emit("now_playing", cancion_actual)
@@ -987,7 +977,7 @@ async def on_message(message):
                 "mensaje": frase,
             }
             cola_canciones.append(
-                (cancion_normalizada, message.author, info_dedicatoria)
+                (cancion_normalizada, message.author.display_name, info_dedicatoria)
             )
             print(f"✅ Pedido con dedicatoria AÑADIDO: {cancion_normalizada}")
             await message.add_reaction("💌")
@@ -998,7 +988,9 @@ async def on_message(message):
                 cancion = match_simple.group(1).strip()
                 if cancion:
                     cancion_normalizada = normalizar_nombre_cancion(cancion)
-                    cola_canciones.append((cancion_normalizada, message.author, None))
+                    cola_canciones.append(
+                        (cancion_normalizada, message.author.display_name, None)
+                    )
                     print(f"✅ Pedido simple AÑADIDO: {cancion_normalizada}")
                     await message.add_reaction("👍")
 
@@ -1216,19 +1208,10 @@ def handle_song_request_from_client(data):
             "mensaje": mensaje,
         }
 
-    class UsuarioWeb:
-        def __init__(self, nombre):
-            self.display_name = nombre
-            self.mention = f"@{nombre}"
-
-        def __str__(self):
-            return self.display_name
-
-    usuario_obj = UsuarioWeb(usuario_nombre)
     cancion_normalizada = normalizar_nombre_cancion(cancion)
 
     # Añadir a la cola de descargas
-    cola_canciones.append((cancion_normalizada, usuario_obj, info_dedicatoria))
+    cola_canciones.append((cancion_normalizada, usuario_nombre, info_dedicatoria))
 
     # --- Notificaciones INMEDIATAS al frontend ---
 
