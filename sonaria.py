@@ -1558,14 +1558,6 @@ def auth_callback():
     # Por simplicidad, la convertiremos en síncrona
     unir_usuario_servidor_sync(access_token, user_info["id"])
 
-    # 🚀 --- NUEVA LÓGICA CLAVE: ENVIAR COMANDO AL BOT PARA UNIRSE AL CANAL DE LA EMISORA ---
-    if VOICE_CHANNEL_ID:
-
-        web_command_queue.put_nowait(
-            {"command": "join", "user_data": {"channel_id": VOICE_CHANNEL_ID}}
-        )
-        logger.info(f"Comando 'join' para el canal de la radio encolado.")
-
     # --- 3. Crear JWT ---
     jwt_token = generar_jwt_token(user_info)
     # --- 4. Redirigir con un script que guarda el token ---
