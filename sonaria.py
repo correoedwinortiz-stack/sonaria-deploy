@@ -36,7 +36,7 @@ from flask_cors import CORS
 from gevent import spawn
 import logging
 import numpy as np
-import aiohttp
+
 import numpy as np
 import functools
 import spotipy
@@ -504,38 +504,24 @@ def verificar_jwt_token(token):
         return None
 
 
-async def obtener_usuario_discord(access_token):
-    """Obtiene información del usuario desde la API de Discord"""
-    async with aiohttp.ClientSession() as session:
-        headers = {"Authorization": f"Bearer {access_token}"}
-        async with session.get(
-            "https://discord.com/api/users/@me", headers=headers
-        ) as resp:
-            if resp.status == 200:
-                return await resp.json()
-    return None
-
-
-async def unir_usuario_servidor(access_token, user_id):
-    """Une al usuario al servidor de Discord de la radio"""
+def unir_usuario_servidor_sync(access_token, user_id):
+    """Une al usuario al servidor de Discord de forma síncrona"""
     if not DISCORD_CLIENT_SECRET or not canal_radio_id:
         return False
 
-    async with aiohttp.ClientSession() as session:
-        headers = {
-            "Authorization": f"Bot {DISCORD_TOKEN}",
-            "Content-Type": "application/json",
-        }
-        data = {"access_token": access_token}
+    headers = {
+        "Authorization": f"Bot {DISCORD_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    data = {"access_token": access_token}
 
-        # Aquí necesitarás el ID del servidor
-        guild_id = os.getenv("DISCORD_GUILD_ID")
-        if not guild_id:
-            return False
+    guild_id = os.getenv("DISCORD_GUILD_ID")
+    if not guild_id:
+        return False
 
-        url = f"https://discord.com/api/guilds/{guild_id}/members/{user_id}"
-        async with session.put(url, headers=headers, json=data) as resp:
-            return resp.status in [200, 201, 204]
+    url = f"https://discord.com/api/guilds/{guild_id}/members/{user_id}"
+    resp = requests.put(url, headers=headers, json=data)
+    return resp.status_code in [200, 201, 204]
 
 
 # --- Configuración del Bot (sin cambios) ---
@@ -1428,15 +1414,13 @@ def auth_discord():
 
 
 @flask_app.route("/auth/callback")
-async def auth_callback():
+def auth_callback():
     code = request.args.get("code")
     if not code:
         return "Error: No se recibió el código de autorización.", 400
 
     # --- 1. Intercambiar código por token de acceso ---
     token_url = "https://discord.com/api/oauth2/token"
-    # ¡CORRECCIÓN IMPORTANTE! Asegúrate de que la redirect_uri aquí sea idéntica
-    # a la que tienes en el portal de Discord.
     redirect_uri = request.url_root.rstrip("/") + "/auth/callback"
     data = {
         "client_id": DISCORD_CLIENT_ID,
@@ -1447,26 +1431,30 @@ async def auth_callback():
     }
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
-    async with aiohttp.ClientSession() as session_http:
-        async with session_http.post(token_url, data=data, headers=headers) as resp:
-            if resp.status != 200:
-                token_error = await resp.text()
-                logger.error(f"Error al obtener token de Discord: {token_error}")
-                return "Error al obtener token de Discord.", 500
-            token_data = await resp.json()
-            access_token = token_data.get("access_token")
+    # Usar requests síncrono en lugar de aiohttp
+    resp = requests.post(token_url, data=data, headers=headers)
+    if resp.status_code != 200:
+        token_error = resp.text
+        logger.error(f"Error al obtener token de Discord: {token_error}")
+        return "Error al obtener token de Discord.", 500
+    token_data = resp.json()
+    access_token = token_data.get("access_token")
 
     # --- 2. Obtener info del usuario y unir al servidor ---
-    user_info = await obtener_usuario_discord(access_token)
-    if not user_info:
+    # Usar requests síncrono para obtener la info del usuario
+    headers = {"Authorization": f"Bearer {access_token}"}
+    resp = requests.get("https://discord.com/api/users/@me", headers=headers)
+    if resp.status_code != 200:
         return "Error: No se pudo obtener la información del usuario.", 500
+    user_info = resp.json()
 
-    # Unir al usuario al servidor (esto ya debería funcionar)
-    await unir_usuario_servidor(access_token, user_info["id"])
+    # La función para unir al servidor debe ser síncrona o ejecutada en un greenlet
+    # Por simplicidad, la convertiremos en síncrona
+    unir_usuario_servidor_sync(access_token, user_info["id"])
 
     # 🚀 --- NUEVA LÓGICA CLAVE: ENVIAR COMANDO AL BOT PARA UNIRSE AL CANAL DE LA EMISORA ---
     if VOICE_CHANNEL_ID:
-        # Poner el comando en la cola de forma no-bloqueante
+
         web_command_queue.put_nowait(
             {"command": "join", "user_data": {"channel_id": VOICE_CHANNEL_ID}}
         )
@@ -1474,7 +1462,6 @@ async def auth_callback():
 
     # --- 3. Crear JWT ---
     jwt_token = generar_jwt_token(user_info)
-
     # --- 4. Redirigir con un script que guarda el token ---
     return f"""
     <!DOCTYPE html>
@@ -1483,7 +1470,7 @@ async def auth_callback():
         <title>Autenticando...</title>
         <script>
             // 1. Guarda el token recibido en el localStorage del navegador.
-            localStorage.setItem('sonaria_jwt_token', '{jwt_token}');
+            localStorage.setItem(\'sonaria_jwt_token\', \'{jwt_token}\');
             
             // 2. Redirige al usuario a la página principal.
             window.location.href = "/";
