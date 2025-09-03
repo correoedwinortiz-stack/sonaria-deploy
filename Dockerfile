@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copiar el archivo de requerimientos de Python.
-COPY requirements.txt .
+COPY requirements_fixed.txt requirements.txt
 
 # Instalar las dependencias de Python.
 RUN pip install --no-cache-dir -r requirements.txt
@@ -32,4 +32,4 @@ EXPOSE 8080
 
 # El comando final para ejecutar la aplicación usando Gunicorn.
 # --preload es clave para que el hilo del bot se inicie correctamente.
-CMD ["gunicorn", "--preload", "--worker-class", "geventwebsocket.gunicorn.workers.GeventWebSocketWorker", "-w", "1", "--bind", "0.0.0.0:8080", "sonaria:flask_app"]
+CMD ["gunicorn", "--worker-class", "geventwebsocket.gunicorn.workers.GeventWebSocketWorker", "-w", "1", "--bind", "0.0.0.0:8080", "sonaria:flask_app"]

@@ -33,7 +33,7 @@ from flask import (
     send_from_directory,
 )
 from flask_cors import CORS
-from threading import Thread
+from gevent import spawn
 import logging
 import numpy as np
 import aiohttp
@@ -41,7 +41,6 @@ import numpy as np
 import functools
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
-import threading
 
 
 # Configurar logging
@@ -1233,7 +1232,7 @@ async def on_command_error(ctx, error):
 flask_app = Flask(__name__, static_folder="frontend", static_url_path="")
 flask_app.secret_key = JWT_SECRET_KEY
 CORS(flask_app)
-socketio = SocketIO(flask_app, cors_allowed_origins="*", async_mode="threading")
+socketio = SocketIO(flask_app, cors_allowed_origins="*", async_mode="gevent")
 
 # Añade esta nueva ruta a tu sección de API de Flask
 
@@ -1576,57 +1575,22 @@ def run_flask():
 # --- INICIO DEL SISTEMA ---
 
 
+# Función para iniciar el bot de Discord
+def start_bot_greenlet():
+    """
+    Inicia el bot de Discord como una greenlet en segundo plano.
+    Esto asegura que el bot se lance una vez que la aplicación esté lista,
+    pero sin bloquear el servidor web.
+    """
+    logger.info("🤖 Iniciando bot de Discord como greenlet...")
+    spawn(bot.start, DISCORD_TOKEN)
+
+
+# Iniciar el bot cuando se carga el módulo
+start_bot_greenlet()
+
+
 def run_server():
     """Función para iniciar el servidor web."""
     # Usamos el puerto 8080 como lo tenías
-    socketio.run(flask_app, host="0.0.0.0", port=8080)
-
-
-bot_thread = None
-is_bot_running = False
-
-
-# --- INICIO DEL SISTEMA (VERSIÓN FINAL Y CORRECTA PARA PRODUCCIÓN) ---
-
-
-def run_bot_in_thread():
-    """
-    Esta función se ejecutará en un hilo separado.
-    Crea un nuevo event loop de asyncio exclusivo para el bot de Discord,
-    evitando conflictos con el servidor web.
-    """
-    logger.info("🤖 Iniciando hilo para el bot de Discord...")
-    try:
-        # 1. Crear un nuevo loop de asyncio para este hilo
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        # 2. Iniciar el bot de Discord. Esta llamada es bloqueante y mantendrá el hilo vivo.
-        logger.info("🔌 Conectando el bot a Discord...")
-        loop.run_until_complete(bot.start(DISCORD_TOKEN))
-
-    except Exception as e:
-        # Captura cualquier error catastrófico que pueda ocurrir en el bot
-        logger.error(
-            f"❌ Error fatal en el hilo del bot de Discord: {e}", exc_info=True
-        )
-    finally:
-        logger.info("🛑 El hilo del bot de Discord ha finalizado.")
-
-
-# ==============================================================================
-# || ESTA ES LA PARTE CLAVE QUE RESTAURA LA LÓGICA DE INICIO INMEDIATO         ||
-# ==============================================================================
-# Cuando Gunicorn carga este archivo para encontrar "flask_app", este código
-# en el nivel superior se ejecuta automáticamente.
-logger.info(
-    "🚀 Módulo sonaria.py cargado. Iniciando el bot de Discord en segundo plano..."
-)
-
-# Creamos e iniciamos el hilo del bot.
-# `daemon=True` asegura que el hilo se cierre si el programa principal (Gunicorn) termina.
-bot_thread = threading.Thread(target=run_bot_in_thread, daemon=True)
-bot_thread.start()
-
-# El código anterior inicia el bot. A partir de aquí, Gunicorn continuará
-# y servirá la aplicación Flask (`flask_app`) en el hilo principal.
+    socketio.run(flask_app, host="0.0.0.0", port=8080, allow_unsafe_werkzeug=True)
