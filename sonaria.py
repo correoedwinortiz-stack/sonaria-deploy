@@ -137,6 +137,7 @@ SILENCE_THRESHOLD = 50.0  # Umbral de volumen para considerar "silencio"
 SILENCE_TIMEOUT = 2.0  # Tiempo en segundos para considerar que está "en silencio"
 banco_recomendaciones = []
 recomendaciones_actuales = []
+VOICE_CHANNEL_ID = os.getenv("CANAL_DE_VOZ_ID")
 
 
 # sonaria.py
@@ -957,6 +958,62 @@ async def procesar_cola_canciones():
         )
 
 
+# --- NUEVA VARIABLE GLOBAL PARA COMANDOS DE LA WEB ---
+web_command_queue = asyncio.Queue()
+
+
+async def process_web_commands():
+    """Procesa comandos que llegan desde la interfaz web."""
+    while True:
+        # Espera un nuevo comando de la cola (esto es no-bloqueante)
+        command_data = await web_command_queue.get()
+        logger.info(f"Comando de la web recibido: {command_data}")
+
+        command = command_data.get("command")
+        user_data = command_data.get("user_data")
+
+        # Aquí manejas los diferentes comandos
+        if command == "join":
+            channel_id = int(user_data.get("channel_id"))
+
+            # Obtiene el objeto del canal de voz
+            voice_channel = bot.get_channel(channel_id)
+            if voice_channel and isinstance(voice_channel, discord.VoiceChannel):
+                # Conecta el bot al canal de voz
+                logger.info(
+                    f"Intentando conectar al canal de voz: {voice_channel.name}"
+                )
+                await voice_channel.connect()
+                emit_with_context(
+                    "bot_status",
+                    {
+                        "message": f"✅ Conectado al canal: {voice_channel.name}",
+                        "status": "connected",
+                    },
+                )
+            else:
+                logger.warning(
+                    f"ID de canal no válido o no es un canal de voz: {channel_id}"
+                )
+                emit_with_context(
+                    "bot_status",
+                    {
+                        "message": "❌ ID de canal no válido. Asegúrate de que es un canal de voz.",
+                        "status": "error",
+                    },
+                )
+
+        # Si quieres añadir más comandos, puedes hacerlo aquí
+        elif command == "leave":
+            # Lógica para que el bot salga del canal
+            if bot.voice_clients:
+                await bot.voice_clients[0].disconnect()
+                emit_with_context(
+                    "bot_status",
+                    {"message": "👋 Bot desconectado.", "status": "disconnected"},
+                )
+
+
 @bot.command(name="empezar", aliases=["start"])
 @commands.has_role("DJ")
 async def empezar(ctx):
@@ -1001,8 +1058,10 @@ async def on_ready():
         f"✅ ¡Conectado como {bot_username}!"
     )  # Añadimos un logger para consistencia
 
-    # --- ¡LÍNEAS CRUCIALES A AÑADIR! ---
-    # Iniciar las tareas en segundo plano DESPUÉS de que el bot se haya conectado.
+    # 🚀 Inicia la tarea que procesa los comandos de la web
+
+    bot.loop.create_task(process_web_commands())
+
     if not procesar_cola_canciones.is_running():
         logger.info("🚀 Iniciando la tarea 'procesar_cola_canciones'.")
         procesar_cola_canciones.start()
@@ -1205,6 +1264,17 @@ def serve_video(filename):
 # --- RUTAS DE LA API WEB ---
 
 
+@socketio.on("web_command")
+def handle_web_command(data):
+    """Maneja los comandos que llegan desde el frontend y los encola para el bot."""
+    command = data.get("command")
+    # Añade el comando a la cola. Esto es no-bloqueante
+    asyncio.run_coroutine_threadsafe(
+        web_command_queue.put({"command": command, "user_data": data}), bot.loop
+    )
+    logger.info(f"Comando '{command}' encolado desde la web.")
+
+
 @socketio.on("nuevo_mensaje_chat")
 def handle_chat_message(data):
     """
@@ -1364,7 +1434,7 @@ async def auth_callback():
     if not code:
         return "Error: No se recibió el código de autorización.", 400
 
-    # --- 1. Intercambiar código por token de acceso (sin cambios) ---
+    # --- 1. Intercambiar código por token de acceso ---
     token_url = "https://discord.com/api/oauth2/token"
     # ¡CORRECCIÓN IMPORTANTE! Asegúrate de que la redirect_uri aquí sea idéntica
     # a la que tienes en el portal de Discord.
@@ -1387,7 +1457,7 @@ async def auth_callback():
             token_data = await resp.json()
             access_token = token_data.get("access_token")
 
-    # --- 2. Obtener info del usuario y unir al servidor (sin cambios) ---
+    # --- 2. Obtener info del usuario y unir al servidor ---
     user_info = await obtener_usuario_discord(access_token)
     if not user_info:
         return "Error: No se pudo obtener la información del usuario.", 500
@@ -1395,12 +1465,18 @@ async def auth_callback():
     # Unir al usuario al servidor (esto ya debería funcionar)
     await unir_usuario_servidor(access_token, user_info["id"])
 
-    # --- 3. Crear JWT (sin cambios) ---
+    # 🚀 --- NUEVA LÓGICA CLAVE: ENVIAR COMANDO AL BOT PARA UNIRSE AL CANAL DE LA EMISORA ---
+    if VOICE_CHANNEL_ID:
+        # Poner el comando en la cola de forma no-bloqueante
+        web_command_queue.put_nowait(
+            {"command": "join", "user_data": {"channel_id": VOICE_CHANNEL_ID}}
+        )
+        logger.info(f"Comando 'join' para el canal de la radio encolado.")
+
+    # --- 3. Crear JWT ---
     jwt_token = generar_jwt_token(user_info)
 
-    # --- 4. ¡NUEVA LÓGICA! Redirigir con un script que guarda el token ---
-    # En lugar de guardar en la sesión del servidor y redirigir,
-    # devolvemos una página HTML simple que ejecuta un script en el cliente.
+    # --- 4. Redirigir con un script que guarda el token ---
     return f"""
     <!DOCTYPE html>
     <html>

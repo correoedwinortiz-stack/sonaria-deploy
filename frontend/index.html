@@ -1114,6 +1114,53 @@
         });
 
 
+        // =======================================================
+        // || LÓGICA PARA CONECTAR EL BOT A UN CANAL DE VOZ WEB ||
+        // =======================================================
+
+        const joinChannelBtn = document.getElementById('joinChannelBtn');
+        const voiceChannelInput = document.getElementById('voiceChannelId');
+
+        joinChannelBtn.addEventListener('click', function () {
+            const channelId = voiceChannelInput.value.trim();
+            if (channelId) {
+                // Emite el comando 'join' al backend a través de Socket.IO
+                socket.emit('web_command', {
+                    command: 'join',
+                    user_data: {
+                        channel_id: channelId
+                    }
+                });
+                showNotification('Conectando...', 'info'); // Muestra una notificación temporal
+            } else {
+                showNotification('Por favor, introduce un ID de canal.', 'error');
+            }
+        });
+
+        // Escuchar el estado de la conexión del bot
+        socket.on('bot_status', function (data) {
+            if (data.status === 'connected') {
+                showNotification(data.message, 'success');
+            } else if (data.status === 'error') {
+                showNotification(data.message, 'error');
+            }
+        });
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 4000);
+        }
+
+
 
         // ==================================================
         // PARTE 3: LISTENERS DE SOCKET.IO
