@@ -945,15 +945,21 @@ async def empezar(ctx):
 
 @bot.event
 async def on_ready():
-    print(f"✅ ¡Conectado como {bot.user.name}!")
+    # El nombre de usuario puede tener un # y números, lo limpiamos para el log
+    bot_username = str(bot.user).split("#")[0]
+    print(f"✅ ¡Conectado como {bot_username}!")
+    logger.info(
+        f"✅ ¡Conectado como {bot_username}!"
+    )  # Añadimos un logger para consistencia
 
-    # Iniciar las tareas en segundo plano que ya tenías
+    # --- ¡LÍNEAS CRUCIALES A AÑADIR! ---
+    # Iniciar las tareas en segundo plano DESPUÉS de que el bot se haya conectado.
     if not procesar_cola_canciones.is_running():
+        logger.info("🚀 Iniciando la tarea 'procesar_cola_canciones'.")
         procesar_cola_canciones.start()
 
-    # --- ¡AÑADIR ESTA LÍNEA! ---
-    # Iniciar la nueva tarea de limpieza
     if not limpiar_archivos_antiguos.is_running():
+        logger.info("🚀 Iniciando la tarea 'limpiar_archivos_antiguos'.")
         limpiar_archivos_antiguos.start()
 
 
