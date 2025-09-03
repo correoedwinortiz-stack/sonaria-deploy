@@ -895,12 +895,8 @@
         <div class="modal-content">
             <h1>Bienvenido a SONARÍA Radio</h1>
             <p id="modal-status-text">Para escuchar y participar, conéctate con tu cuenta de Discord.</p>
-            <!-- El ID del botón principal ahora es "connectButton" -->
-            <button id="connectButton" class="btn">🔊 Conectar con Discord</button>
-            <!-- Este botón es para usuarios que ya están logueados -->
-            <button id="closeModalButton" class="btn" style="margin-top: 15px; background: grey; display: none;">Cerrar
-                y
-                Empezar</button>
+
+            <button id="mainModalButton" class="btn">🔊 Conectar con Discord</button>
         </div>
     </div>
 
@@ -1062,17 +1058,6 @@
             verificarUsuario();
 
 
-            // El botón "Conectar" abre la ventana de login de Discord
-            connectButton.addEventListener('click', () => {
-                window.open(BACKEND_URL + '/auth/discord', 'discordAuth', 'width=500,height=700');
-            });
-
-            // El botón "Cerrar" oculta el modal y activa el video
-            closeModalButton.addEventListener('click', () => {
-                welcomeModal.style.display = 'none';
-                videoFrente.muted = false; // Le quitamos el silencio
-                videoFrente.play().catch(e => console.warn("La reproducción del video fue bloqueada.", e));
-            });
 
 
 
@@ -1330,21 +1315,33 @@
         async function verificarUsuario() {
             const token = localStorage.getItem('sonaria_jwt_token');
             const userNameInput = document.getElementById('userName');
-            const connectButton = document.getElementById('connectButton');
-            const closeModalButton = document.getElementById('closeModalButton');
+            const mainModalButton = document.getElementById('mainModalButton');
             const modalStatusText = document.getElementById('modal-status-text');
 
+            // --- Estado 1: Usuario NO autenticado ---
             if (!token) {
                 currentUser = null;
                 userNameInput.placeholder = 'Conéctate para pedir';
                 userNameInput.disabled = true;
-                connectButton.style.display = 'block';
-                closeModalButton.style.display = 'none';
+                mainModalButton.textContent = '🔊 Conectar con Discord';
                 modalStatusText.textContent = 'Para escuchar y participar, conéctate con tu cuenta de Discord.';
+
+                // Lógica para abrir el popup de login.
+                mainModalButton.onclick = () => {
+                    const discordLoginPopup = window.open(BACKEND_URL + '/auth/discord', 'discordAuth', 'width=500,height=700');
+                    // Agregamos un listener para detectar si la ventana se cierra y forzar la verificación.
+                    const checkLogin = setInterval(() => {
+                        if (!discordLoginPopup || discordLoginPopup.closed) {
+                            clearInterval(checkLogin);
+                            verificarUsuario(); // Vuelve a verificar para actualizar la UI
+                        }
+                    }, 500);
+                };
                 return;
             }
+
+            // --- Estado 2: Usuario autenticado ---
             try {
-                // Verificamos el token con el backend
                 const response = await fetch(BACKEND_URL + '/api/auth/verify', { headers: { 'Authorization': `Bearer ${token}` } });
                 const data = await response.json();
 
@@ -1353,41 +1350,34 @@
                     userNameInput.value = currentUser.username;
                     userNameInput.disabled = true;
 
-                    // --- ¡LÓGICA MEJORADA! ---
-                    // Ahora que el usuario es válido, pedimos la info de la radio
-                    const radioInfoResponse = await fetch(BACKEND_URL + '/api/radio-info');
-                    const radioInfo = await radioInfoResponse.json();
+                    // Ahora que sabemos que el usuario es válido, preparamos el botón para unirse al canal de voz.
+                    mainModalButton.textContent = `🎧 Unirse a la radio (${currentUser.username})`;
+                    modalStatusText.textContent = `¡Hola, ${currentUser.username}! La radio está en vivo.`;
 
-                    connectButton.style.display = 'none';
-                    closeModalButton.style.display = 'block';
-
-                    if (radioInfo.is_ready) {
-                        modalStatusText.textContent = `¡Hola, ${currentUser.username}! La radio está en vivo.`;
-                        closeModalButton.textContent = '🔊 ¡Entrar al canal de voz!';
-                        // Hacemos que el botón abra el enlace al canal de voz
-                        closeModalButton.onclick = () => {
-                            window.open(radioInfo.voice_channel_link, '_blank'); // Abre Discord en una nueva pestaña
-                            document.getElementById('welcomeModal').style.display = 'none'; // Cierra el modal
-                        };
-                    } else {
-                        modalStatusText.textContent = `¡Hola, ${currentUser.username}! La radio no está transmitiendo ahora mismo.`;
-                        closeModalButton.textContent = 'Cerrar';
-                        closeModalButton.onclick = () => {
-                            document.getElementById('welcomeModal').style.display = 'none';
-                        };
-                    }
+                    // Lógica para unirse al canal de voz.
+                    mainModalButton.onclick = () => {
+                        // Aquí usamos el ID del canal de voz que nos proporcionaste en el .env
+                        const guildId = '1409669462723';
+                        const channelId = '1409669297852121294';
+                        // La URL de invitación es la forma más limpia de abrir la aplicación de Discord
+                        const discordVoiceUrl = `https://discord.com/invite/${guildId}/${channelId}`;
+                        window.open(discordVoiceUrl, '_blank');
+                        document.getElementById('welcomeModal').style.display = 'none'; // Cierra el modal
+                    };
 
                 } else {
+                    // Si el token no es válido, lo eliminamos y reseteamos el estado.
                     localStorage.removeItem('sonaria_jwt_token');
                     currentUser = null;
-                    verificarUsuario(); // Vuelve a llamar para resetear la UI
+                    verificarUsuario();
                 }
             } catch (error) {
                 console.error("Error verificando el usuario:", error);
+                localStorage.removeItem('sonaria_jwt_token');
                 currentUser = null;
+                verificarUsuario();
             }
         }
-
 
         async function handleRequestFormSubmit(e) {
             e.preventDefault();
