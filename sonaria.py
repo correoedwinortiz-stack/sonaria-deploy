@@ -41,7 +41,6 @@ import numpy as np
 import functools
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
-import eventlet
 import threading
 
 
@@ -199,6 +198,12 @@ jingles_de_relleno.extend(BANCO_JINGLES["PRINCIPAL"])
 BANCO_JINGLES["RELLENO"] = list(set(jingles_de_relleno))
 
 print("✅ Banco de jingles cargado.")
+
+
+def emit_with_context(event, data, **kwargs):
+    """Emite un evento de SocketIO dentro del contexto de la aplicación Flask"""
+    with flask_app.app_context():
+        socketio.emit(event, data, **kwargs)
 
 
 def obtener_recomendaciones_deezer(nombre_artista):
@@ -559,7 +564,7 @@ class AudioLevelSource(discord.PCMVolumeTransformer):
             audio_array = np.frombuffer(data, dtype=np.int16)
             rms = np.sqrt(np.mean(np.square(audio_array.astype(np.float64))))
             level = float(np.clip((20 * np.log10(rms + 1e-10) + 60) / 60, 0, 1))
-            socketio.emit("audio_level", {"level": level})
+            emit_with_context("audio_level", {"level": level})
 
             if rms >= SILENCE_THRESHOLD:
                 fft_data = np.abs(np.fft.rfft(audio_array))
@@ -569,7 +574,7 @@ class AudioLevelSource(discord.PCMVolumeTransformer):
                 high = np.mean(fft_data[(freqs >= 4000)])
                 total = np.max(fft_data) if np.max(fft_data) > 0 else 1
 
-                socketio.emit(
+                emit_with_context(
                     "audio_bands",
                     {
                         "bass": float(bass / total),
@@ -675,7 +680,7 @@ async def radio_manager(ctx):
             "artista": "SONARÍA Radio",
             "usuario": None,
         }
-        socketio.emit("now_playing", cancion_actual)
+        emit_with_context("now_playing", cancion_actual)
 
         await reproducir_archivo(voice_client, ruta_pista)
 
@@ -715,7 +720,7 @@ async def reproducir_playlist(ctx):
             "usuario": cancion_actual_obj["autor"],  # Ahora es directamente el string
             "cover_url": cancion_actual_obj.get("cover_url"),
         }
-        socketio.emit("now_playing", cancion_actual)
+        emit_with_context("now_playing", cancion_actual)
 
         # --- LÓGICA DE CONSTRUCCIÓN DE PLAYLIST CORREGIDA ---
         playlist_de_rutas = []
@@ -792,7 +797,7 @@ async def reproducir_playlist(ctx):
             "⏹️ Finalizando playlist. Flag 'playlist_en_curso' establecido a False."
         )
         # Notificar al frontend que la cola ha cambiado (se ha quitado un elemento)
-        socketio.emit("queue_updated")
+        emit_with_context("queue_updated")
 
 
 # ==============================================================================
@@ -844,7 +849,7 @@ async def procesar_cola_canciones():
             if not ruta_descargada:
                 logger.error(f"❌ La descarga de '{titulo_final}' falló.")
                 # Enviar notificación de error al chat
-                socketio.emit(
+                emit_with_context(
                     "mensaje_a_cliente",
                     {
                         "texto": f"❌ No se pudo descargar '{titulo_final}'. Intenta con otro nombre.",
@@ -891,7 +896,7 @@ async def procesar_cola_canciones():
             if nuevas_sugerencias:
                 global recomendaciones_actuales
                 recomendaciones_actuales = nuevas_sugerencias
-                socketio.emit("recommendations_updated", recomendaciones_actuales)
+                emit_with_context("recommendations_updated", recomendaciones_actuales)
                 logger.info(
                     f"🎯 Nuevas recomendaciones generadas basadas en {artista_base}"
                 )
@@ -914,13 +919,13 @@ async def procesar_cola_canciones():
         )
 
         # Notificar a la UI que la cola ha cambiado
-        socketio.emit("queue_updated")
+        emit_with_context("queue_updated")
 
         # 4. ENVIAR NOTIFICACIÓN DE ÉXITO
         frase_descarga = random.choice(FRASES_DESCARGA_COMPLETADA).format(
             cancion=titulo_final
         )
-        socketio.emit(
+        emit_with_context(
             "mensaje_a_cliente",
             {"texto": frase_descarga, "usuario": "Bot SONARIA", "esBot": True},
         )
@@ -942,7 +947,7 @@ async def procesar_cola_canciones():
             f"❌ Error catastrófico en procesar_cola_canciones: {e}", exc_info=True
         )
         # Enviar notificación de error
-        socketio.emit(
+        emit_with_context(
             "mensaje_a_cliente",
             {
                 "texto": "❌ Hubo un error procesando la última petición. Inténtalo de nuevo.",
@@ -971,7 +976,7 @@ async def empezar(ctx):
 
     radio_activa = True
     canal_radio_id = voice_client.channel.id
-    socketio.emit("bot_status_update", {"is_ready": True})
+    emit_with_context("bot_status_update", {"is_ready": True})
     logger.info("✅ Radio activada. Señal 'is_ready: True' enviada a los clientes.")
 
     await ctx.send("📻 **¡Iniciando SONARIA Radio!**")
@@ -1106,7 +1111,7 @@ async def salir(ctx):
         print("❌ Bot desconectado. WebRTC no disponible.")
         is_bot_ready_for_webrtc = False
         # Avisamos a TODOS los clientes web que ya NO estamos listos
-        socketio.emit("bot_status_update", {"is_ready": False})
+        emit_with_context("bot_status_update", {"is_ready": False})
     else:
         await ctx.send("No estoy conectado a ningún canal de voz.")
 
@@ -1120,7 +1125,7 @@ async def parar(ctx):
 
     radio_activa = False
     canal_radio_id = None
-    socketio.emit("bot_status_update", {"is_ready": False})
+    emit_with_context("bot_status_update", {"is_ready": False})
     logger.info("❌ Radio detenida. Señal 'is_ready: False' enviada a los clientes.")
 
     if radio_manager.is_running():
@@ -1169,8 +1174,7 @@ async def on_command_error(ctx, error):
 flask_app = Flask(__name__, static_folder="frontend", static_url_path="")
 flask_app.secret_key = JWT_SECRET_KEY
 CORS(flask_app)
-socketio = SocketIO(flask_app, cors_allowed_origins="*", async_mode="eventlet")
-
+socketio = SocketIO(flask_app, cors_allowed_origins="*", async_mode="threading")
 
 # Añade esta nueva ruta a tu sección de API de Flask
 
@@ -1216,7 +1220,7 @@ def handle_chat_message(data):
 
     # Retransmitir el mensaje a TODOS los clientes conectados, incluyéndolo a él mismo
     # El frontend ya sabe cómo diferenciar si el mensaje es del propio usuario o de otro.
-    socketio.emit(
+    emit_with_context(
         "mensaje_a_cliente",
         {
             "texto": texto,
@@ -1264,7 +1268,7 @@ def handle_song_request_from_client(data):
     )
 
     # Notificar a todos que la cola de peticiones visual se actualizó
-    socketio.emit("queue_updated")
+    emit_with_context("queue_updated")
 
     # Enviar mensaje de CONFIRMACIÓN del Bot al chat
     try:
@@ -1277,7 +1281,7 @@ def handle_song_request_from_client(data):
                 cancion=cancion_normalizada
             )
 
-        socketio.emit(
+        emit_with_context(
             "mensaje_a_cliente",
             {"texto": frase, "usuario": "Bot SONARIA", "esBot": True},
         )

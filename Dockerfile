@@ -32,4 +32,4 @@ EXPOSE 8080
 
 # El comando final para ejecutar la aplicación usando Gunicorn.
 # --preload es clave para que el hilo del bot se inicie correctamente.
-CMD ["gunicorn", "--preload", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:8080", "sonaria:flask_app"]
+CMD ["gunicorn", "--preload", "--worker-class", "-w", "1", "--bind", "0.0.0.0:8080", "sonaria:flask_app"]
