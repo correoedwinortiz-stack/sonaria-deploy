@@ -27,11 +27,5 @@ COPY . .
 # Crear los directorios que tu aplicación necesita para funcionar.
 RUN mkdir -p jingles downloads ambientes videos
 
-# Hacer ejecutable el script de inicio
-RUN chmod +x start_production.sh
-
-# Exponer el puerto 8080 para que el servidor web sea accesible.
-EXPOSE 8080
-
-# El comando final para ejecutar la aplicación usando el script de inicio.
-CMD ["./start_production.sh"]
+# El comando final para ejecutar la aplicación usando Gunicorn directamente.
+CMD ["gunicorn", "--worker-class", "geventwebsocket.gunicorn.workers.GeventWebSocketWorker", "-w", "1", "--bind", "0.0.0.0:8080", "--timeout", "120", "--log-level", "info", "sonaria:flask_app"]
