@@ -802,27 +802,38 @@ async def reproducir_playlist(ctx):
 
 @tasks.loop(seconds=10.0)
 async def procesar_cola_canciones():
+    # LÍNEA DE DEBUG CRÍTICA - mantén esto temporalmente
+    logger.info(
+        f"🔍 DEBUG: Revisando colas. cola_canciones: {len(cola_canciones)}, cola_reproduccion: {len(cola_reproduccion)}"
+    )
+
     if not cola_canciones:
         return
 
     # No procesar más si la cola de reproducción ya tiene canciones esperando
     if len(cola_reproduccion) > 1:
         logger.info(
-            "📥 Pausando descargas, la cola de reproducción tiene items esperando."
+            "🔥 Pausando descargas, la cola de reproducción tiene items esperando."
         )
         return
 
-    logger.info("📥 Iniciando procesamiento de la siguiente petición en cola.")
-    cancion_o_letra, autor, dedicatoria_info = cola_canciones.popleft()
+    logger.info("🔥 Iniciando procesamiento de la siguiente petición en cola.")
 
     try:
+        cancion_o_letra, autor, dedicatoria_info = cola_canciones.popleft()
+
+        # DEBUG: Mostrar exactamente qué estamos procesando
+        logger.info(
+            f"🎵 Procesando: '{cancion_o_letra}' de {autor} (tipo: {type(autor)})"
+        )
+
         titulo_final = cancion_o_letra
         nombre_archivo = sanitizar_nombre_archivo(titulo_final)
         ruta_archivo = os.path.join(DOWNLOAD_PATH, nombre_archivo)
 
-        # 1. LÓGICA DE DESCARGA (LA PARTE QUE FALTABA)
+        # 1. LÓGICA DE DESCARGA
         if not os.path.exists(ruta_archivo):
-            logger.info(f"📥 Descargando '{titulo_final}'... (Esto puede tardar)")
+            logger.info(f"⬇️ Descargando '{titulo_final}'... (Esto puede tardar)")
             loop = asyncio.get_running_loop()
             ruta_descargada = await loop.run_in_executor(
                 None,
@@ -832,12 +843,22 @@ async def procesar_cola_canciones():
             )
             if not ruta_descargada:
                 logger.error(f"❌ La descarga de '{titulo_final}' falló.")
-                # Podríamos añadir una notificación de error al chat aquí
+                # Enviar notificación de error al chat
+                socketio.emit(
+                    "mensaje_a_cliente",
+                    {
+                        "texto": f"❌ No se pudo descargar '{titulo_final}'. Intenta con otro nombre.",
+                        "usuario": "Bot SONARIA",
+                        "esBot": True,
+                    },
+                )
                 return
+        else:
+            logger.info(f"📁 Archivo '{titulo_final}' ya existe, usando versión local.")
 
         logger.info(f"✅ '{titulo_final}' listo para reproducir.")
 
-        # 2. LÓGICA DE METADATOS (CARÁTULA, RECOMENDACIONES, ETC. - TAMBIÉN FALTABA)
+        # 2. LÓGICA DE METADATOS (carátula, recomendaciones, etc.)
         titulo_base = titulo_final.split(" - ")[0]
         artista_base = (
             titulo_final.split(" - ")[1]
@@ -845,6 +866,8 @@ async def procesar_cola_canciones():
             else "Artista Desconocido"
         )
         cover_url = None
+
+        # Obtener carátula de Spotify
         if sp:
             try:
                 query = f"{titulo_base} {artista_base}"
@@ -855,45 +878,57 @@ async def procesar_cola_canciones():
                     cover_url = results["tracks"]["items"][0]["album"]["images"][0][
                         "url"
                     ]
+                    logger.info(f"🎨 Carátula encontrada para '{titulo_final}'")
             except Exception as e:
                 logger.warning(f"No se pudo obtener la carátula de Spotify: {e}")
 
-        loop = asyncio.get_running_loop()
-        nuevas_sugerencias = await loop.run_in_executor(
-            None, obtener_recomendaciones_deezer, artista_base
-        )
-        if nuevas_sugerencias:
-            global recomendaciones_actuales
-            recomendaciones_actuales = nuevas_sugerencias
-            socketio.emit("recommendations_updated", recomendaciones_actuales)
+        # Obtener recomendaciones
+        try:
+            loop = asyncio.get_running_loop()
+            nuevas_sugerencias = await loop.run_in_executor(
+                None, obtener_recomendaciones_deezer, artista_base
+            )
+            if nuevas_sugerencias:
+                global recomendaciones_actuales
+                recomendaciones_actuales = nuevas_sugerencias
+                socketio.emit("recommendations_updated", recomendaciones_actuales)
+                logger.info(
+                    f"🎯 Nuevas recomendaciones generadas basadas en {artista_base}"
+                )
+        except Exception as e:
+            logger.warning(f"Error obteniendo recomendaciones: {e}")
 
-        # 3. AÑADIR A LA COLA DE REPRODUCCIÓN (¡LA PARTE MÁS CRÍTICA QUE FALTABA!)
+        # 3. AÑADIR A LA COLA DE REPRODUCCIÓN (¡LA PARTE MÁS CRÍTICA!)
         cola_reproduccion.append(
             {
                 "ruta_archivo": ruta_archivo,
                 "titulo": titulo_final,
-                "autor": autor,
+                "autor": str(autor),  # Asegurar que sea string
                 "dedicatoria": dedicatoria_info,
                 "cover_url": cover_url,
             }
         )
-        socketio.emit(
-            "queue_updated"
-        )  # Notificar a la UI que la cola visual ha cambiado
 
-        # 4. ENVIAR LA NOTIFICACIÓN DE ÉXITO (AHORA SÍ TIENE SENTIDO)
+        logger.info(
+            f"🎶 '{titulo_final}' añadido a la cola de reproducción. Cola actual: {len(cola_reproduccion)} elementos"
+        )
+
+        # Notificar a la UI que la cola ha cambiado
+        socketio.emit("queue_updated")
+
+        # 4. ENVIAR NOTIFICACIÓN DE ÉXITO
         frase_descarga = random.choice(FRASES_DESCARGA_COMPLETADA).format(
             cancion=titulo_final
         )
         socketio.emit(
             "mensaje_a_cliente",
-            {"texto": frase_descarga, "usuario": "Bot SONARÍA", "esBot": True},
+            {"texto": frase_descarga, "usuario": "Bot SONARIA", "esBot": True},
         )
         logger.info(
             f"✔️ Notificación de descarga completada enviada al chat para '{titulo_final}'."
         )
 
-        # 5. INTERRUMPIR AUDIO DE FONDO (OPCIONAL PERO RECOMENDADO)
+        # 5. INTERRUMPIR MÚSICA DE FONDO (OPCIONAL PERO RECOMENDADO)
         if bot.voice_clients:
             voice_client = bot.voice_clients[0]
             if voice_client.is_playing() and not playlist_en_curso:
@@ -905,6 +940,15 @@ async def procesar_cola_canciones():
     except Exception as e:
         logger.error(
             f"❌ Error catastrófico en procesar_cola_canciones: {e}", exc_info=True
+        )
+        # Enviar notificación de error
+        socketio.emit(
+            "mensaje_a_cliente",
+            {
+                "texto": "❌ Hubo un error procesando la última petición. Inténtalo de nuevo.",
+                "usuario": "Bot SONARIA",
+                "esBot": True,
+            },
         )
 
 
@@ -1191,10 +1235,6 @@ def index():
 
 @socketio.on("peticion_desde_cliente")
 def handle_song_request_from_client(data):
-    """
-    Gestiona las peticiones de canciones desde el cliente web.
-    Notifica INMEDIATAMENTE al chat sobre la recepción de la petición.
-    """
     usuario_nombre = data.get("usuario", "Usuario Web")
     cancion = data.get("cancion")
     dedicatoria = data.get("dedicatoria")
@@ -1205,7 +1245,6 @@ def handle_song_request_from_client(data):
 
     logger.info(f"✅ Petición por Socket.IO recibida: '{cancion}' de {usuario_nombre}")
 
-    # --- Lógica de procesamiento de la petición (sin cambios) ---
     info_dedicatoria = None
     if dedicatoria:
         info_dedicatoria = {
@@ -1216,15 +1255,18 @@ def handle_song_request_from_client(data):
 
     cancion_normalizada = normalizar_nombre_cancion(cancion)
 
-    # Añadir a la cola de descargas
-    cola_canciones.append((cancion_normalizada, usuario_nombre, info_dedicatoria))
+    # ASEGURAR que autor es un string, no un objeto de Discord
+    cola_canciones.append((cancion_normalizada, str(usuario_nombre), info_dedicatoria))
 
-    # --- Notificaciones INMEDIATAS al frontend ---
+    # DEBUG LOG - mantén esto temporalmente
+    logger.info(
+        f"🔍 Cola después de añadir: cola_canciones={len(cola_canciones)}, elementos={list(cola_canciones)}"
+    )
 
-    # 1. Notificar a todos que la cola de peticiones visual se actualizó
+    # Notificar a todos que la cola de peticiones visual se actualizó
     socketio.emit("queue_updated")
 
-    # 2. Enviar el mensaje de CONFIRMACIÓN del Bot al chat
+    # Enviar mensaje de CONFIRMACIÓN del Bot al chat
     try:
         if info_dedicatoria:
             frase = random.choice(FRASES_DEDICATORIA_RECIBIDA).format(
@@ -1235,10 +1277,9 @@ def handle_song_request_from_client(data):
                 cancion=cancion_normalizada
             )
 
-        # ¡ESTA ES LA PARTE CRÍTICA! Se emite el mensaje al cliente.
         socketio.emit(
             "mensaje_a_cliente",
-            {"texto": frase, "usuario": "Bot SONARÍA", "esBot": True},
+            {"texto": frase, "usuario": "Bot SONARIA", "esBot": True},
         )
         logger.info(
             f"✔️ Notificación de petición recibida enviada al chat para '{cancion_normalizada}'."
