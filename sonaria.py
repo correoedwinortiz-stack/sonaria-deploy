@@ -42,7 +42,6 @@ import functools
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import threading
-from discord.ext import commands, tasks
 
 
 # Configurar logging
@@ -1230,12 +1229,6 @@ async def on_command_error(ctx, error):
         print(f"Ocurrió un error no manejado: {error}")
 
 
-@tasks.loop(count=1)  # El 'count=1' asegura que solo se ejecute una vez
-async def start_bot_task():
-    logger.info("🔌 Conectando el bot a Discord...")
-    await bot.start(DISCORD_TOKEN)
-
-
 # --- CONFIGURACIÓN DE FLASK CON WEBSOCKETS ---
 flask_app = Flask(__name__, static_folder="frontend", static_url_path="")
 flask_app.secret_key = JWT_SECRET_KEY
@@ -1596,6 +1589,31 @@ is_bot_running = False
 # --- INICIO DEL SISTEMA (VERSIÓN FINAL Y CORRECTA PARA PRODUCCIÓN) ---
 
 
+def run_bot_in_thread():
+    """
+    Esta función se ejecutará en un hilo separado.
+    Crea un nuevo event loop de asyncio exclusivo para el bot de Discord,
+    evitando conflictos con el servidor web.
+    """
+    logger.info("🤖 Iniciando hilo para el bot de Discord...")
+    try:
+        # 1. Crear un nuevo loop de asyncio para este hilo
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        # 2. Iniciar el bot de Discord. Esta llamada es bloqueante y mantendrá el hilo vivo.
+        logger.info("🔌 Conectando el bot a Discord...")
+        loop.run_until_complete(bot.start(DISCORD_TOKEN))
+
+    except Exception as e:
+        # Captura cualquier error catastrófico que pueda ocurrir en el bot
+        logger.error(
+            f"❌ Error fatal en el hilo del bot de Discord: {e}", exc_info=True
+        )
+    finally:
+        logger.info("🛑 El hilo del bot de Discord ha finalizado.")
+
+
 # ==============================================================================
 # || ESTA ES LA PARTE CLAVE QUE RESTAURA LA LÓGICA DE INICIO INMEDIATO         ||
 # ==============================================================================
@@ -1607,7 +1625,7 @@ logger.info(
 
 # Creamos e iniciamos el hilo del bot.
 # `daemon=True` asegura que el hilo se cierre si el programa principal (Gunicorn) termina.
-
+bot_thread = threading.Thread(target=run_bot_in_thread, daemon=True)
 bot_thread.start()
 
 # El código anterior inicia el bot. A partir de aquí, Gunicorn continuará
