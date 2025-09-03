@@ -797,7 +797,7 @@ async def reproducir_playlist(ctx):
             "⏹️ Finalizando playlist. Flag 'playlist_en_curso' establecido a False."
         )
         # Notificar al frontend que la cola ha cambiado (se ha quitado un elemento)
-        emit_with_context("queue_updated")
+        emit_with_context("queue_updated", {})
 
 
 # ==============================================================================
@@ -919,7 +919,7 @@ async def procesar_cola_canciones():
         )
 
         # Notificar a la UI que la cola ha cambiado
-        emit_with_context("queue_updated")
+        emit_with_context("queue_updated", {})
 
         # 4. ENVIAR NOTIFICACIÓN DE ÉXITO
         frase_descarga = random.choice(FRASES_DESCARGA_COMPLETADA).format(
