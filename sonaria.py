@@ -1582,12 +1582,25 @@ def start_bot_greenlet():
     Esto asegura que el bot se lance una vez que la aplicación esté lista,
     pero sin bloquear el servidor web.
     """
+    import asyncio
+
     logger.info("🤖 Iniciando bot de Discord como greenlet...")
-    spawn(bot.start, DISCORD_TOKEN)
+
+    # Crear un nuevo loop de asyncio para el bot
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        # Ejecutar el bot en el loop
+        loop.run_until_complete(bot.start(DISCORD_TOKEN))
+    except Exception as e:
+        logger.error(f"❌ Error al iniciar el bot de Discord: {e}")
+    finally:
+        loop.close()
 
 
 # Iniciar el bot cuando se carga el módulo
-start_bot_greenlet()
+spawn(start_bot_greenlet)
 
 
 def run_server():
