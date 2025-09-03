@@ -1436,16 +1436,11 @@ def handle_connect():
     emit("now_playing", cancion_actual, room=sid)
 
 
-# VERSIÓN UNIFICADA Y CORRECTA
+# VERSIÓN A PRUEBA DE BALAS
 @socketio.on("disconnect")
 def handle_disconnect():
-    """
-    Limpia la conexión del peer y el registro de usuario cuando se desconecta.
-    """
-    sid = request.sid
-    logger.info(f"Cliente desconectado: {sid}")
-
-    usuarios_conectados.discard(sid)
+    logger.info(f"🔌 Cliente web desconectado: {request.sid}")
+    usuarios_conectados.discard(request.sid)
 
 
 def run_flask():
