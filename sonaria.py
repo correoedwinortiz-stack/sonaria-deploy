@@ -1444,16 +1444,7 @@ def handle_disconnect():
     """
     sid = request.sid
     logger.info(f"Cliente desconectado: {sid}")
-    loop = asyncio.get_running_loop()
 
-    # Limpiar conexión WebRTC si existe
-    if sid in peer_connections:
-        pc = peer_connections[sid]
-        asyncio.run_coroutine_threadsafe(pc.close(), loop)
-        del peer_connections[sid]
-        logger.info(f"Conexión WebRTC para {sid} cerrada.")
-
-    # Limpiar registro de usuarios conectados
     usuarios_conectados.discard(sid)
 
 
