@@ -835,45 +835,72 @@ def obtener_canciones_mismo_artista(nombre_artista):
 # sonaria.py
 
 
+# sonaria.py
+
+
 async def obtener_recomendaciones_spotify_mejoradas(cancion_actual):
     """
-    Función maestra para obtener recomendaciones.
-    Intenta primero la solución simple de Spotify, y si falla, usa Deezer.
+    Busca la canción en Spotify, normaliza el nombre del artista y
+    obtiene las canciones más populares de ese mismo artista.
+    Si falla, usa Deezer como alternativa.
     """
-    nombre_artista = cancion_actual.get("artista", "")
+    # 1. Obtener el título de la canción.
+    titulo_cancion = cancion_actual.get("titulo", "")
 
-    # Evita llamadas si el artista es desconocido
-    if not nombre_artista or nombre_artista == "Artista Desconocido":
-        logger.warning(
-            f"No se pueden buscar recomendaciones para 'Artista Desconocido'."
-        )
+    if not titulo_cancion:
+        logger.warning("No hay título de canción para buscar.")
         return []
 
-    # 1. Intenta la solución simple y confiable de Spotify
     try:
-        recomendaciones_simples = await bot.loop.run_in_executor(
-            None, obtener_canciones_mismo_artista, nombre_artista
+        if not sp:
+            raise ValueError("El cliente de Spotify no está inicializado.")
+
+        # 2. Buscar la canción en Spotify para obtener el nombre del artista.
+        logger.info(f"🔍 Buscando '{titulo_cancion}' en Spotify para normalizar...")
+        results = await bot.loop.run_in_executor(
+            None, lambda: sp.search(q=titulo_cancion, type="track", limit=1)
         )
-        if recomendaciones_simples:
-            return recomendaciones_simples
+
+        if not results or not results["tracks"]["items"]:
+            raise ValueError("No se encontró la canción en Spotify.")
+
+        # 3. Extraer y normalizar el nombre del artista del resultado.
+        artista_normalizado = results["tracks"]["items"][0]["artists"][0]["name"]
+
+        logger.info(f"✅ Artista normalizado: '{artista_normalizado}'.")
+
+        # 4. Usar el nombre del artista normalizado para obtener sus top tracks.
+        recomendaciones_spotify = await bot.loop.run_in_executor(
+            None, obtener_canciones_mismo_artista, artista_normalizado
+        )
+
+        if recomendaciones_spotify:
+            return recomendaciones_spotify
+        else:
+            raise ValueError("No se encontraron top tracks del artista normalizado.")
+
     except Exception as e:
         logger.warning(
-            f"⚠️ La búsqueda simple en Spotify falló. Intentando con Deezer: {e}"
+            f"⚠️ La búsqueda en Spotify falló. Intentando con Deezer como alternativa: {e}"
         )
+        # 5. Si Spotify falla, usa Deezer con el nombre del artista original (si existe).
+        nombre_artista_original = cancion_actual.get("artista", "")
+        if nombre_artista_original and nombre_artista_original != "Artista Desconocido":
+            try:
+                deezer_recs = await bot.loop.run_in_executor(
+                    None, obtener_recomendaciones_deezer, nombre_artista_original
+                )
+                if deezer_recs:
+                    return deezer_recs
+            except Exception as deezer_e:
+                logger.error(f"❌ Error en la API de Deezer: {deezer_e}", exc_info=True)
+                return []
 
-    # 2. Si Spotify falla, usa Deezer como alternativa
-    try:
-        deezer_recs = await bot.loop.run_in_executor(
-            None, obtener_recomendaciones_deezer, nombre_artista
-        )
-        if deezer_recs:
-            return deezer_recs
-    except Exception as deezer_e:
-        logger.error(f"❌ Error en la API de Deezer: {deezer_e}", exc_info=True)
-        return []
+    return []
 
-    return []  # Devuelve una lista vacía si ninguna de las opciones funciona
 
+# Nota: La función 'obtener_canciones_mismo_artista' que creamos antes
+#       no necesita ser modificada.
 
 # ==============================================================================
 # ||      TAREA procesar_cola_canciones CON DESCARGA NO BLOQUEANTE           ||
