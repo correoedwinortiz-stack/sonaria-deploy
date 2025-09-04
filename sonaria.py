@@ -413,8 +413,8 @@ async def limpiar_archivos_antiguos():
 
 
 # --- NUEVAS VARIABLES GLOBALES ---
-MIN_DURACION_SEGUNDOS = 90  # 1.5 minutos
-MAX_DURACION_SEGUNDOS = 420  # 7 minutos
+MIN_DURACION_SEGUNDOS = 60  # 1 minutos
+MAX_DURACION_SEGUNDOS = 360  # 6 minutos
 
 
 def descargar_audio_youtube(busqueda, archivo_salida):
@@ -431,36 +431,35 @@ def descargar_audio_youtube(busqueda, archivo_salida):
         ],
         "noplaylist": True,
         "quiet": True,
-        "default_search": "ytsearchmusic",  # 🎵 Buscar solo en música
+        "default_search": "ytsearch",  # 🔄 volvemos a búsqueda normal
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # 1. Buscar varios resultados (no descargar aún)
-            info = ydl.extract_info(f"ytsearchmusic10:{busqueda}", download=False)
+            # 1. Buscar varios resultados (máx 10) sin descargar
+            info = ydl.extract_info(f"ytsearch10:{busqueda}", download=False)
             if not info or "entries" not in info or not info["entries"]:
                 logger.warning(f"❌ No se encontraron resultados para '{busqueda}'.")
                 return None
 
-            # 2. Revisar hasta 10 resultados para encontrar uno válido
+            # 2. Revisar resultados hasta encontrar uno con duración válida
             for entry in info["entries"]:
                 duracion = entry.get("duration")
                 titulo = entry.get("title")
 
                 if not duracion:
-                    continue  # saltar si no hay info de duración
+                    continue  # saltar si no tiene duración
 
                 if MIN_DURACION_SEGUNDOS <= duracion <= MAX_DURACION_SEGUNDOS:
                     logger.info(
-                        f"🎶 Seleccionado: '{titulo}' ({duracion}s) como candidato válido."
+                        f"🎶 Seleccionado: '{titulo}' ({duracion}s) como válido."
                     )
-                    # 3. Descargar este resultado
+                    # Descargar este resultado
                     ydl.download([entry["webpage_url"]])
                     return ruta_absoluta
                 else:
                     logger.info(f"⏭️ Descartado '{titulo}' por duración {duracion}s.")
 
-            # Si ningún resultado es válido
             logger.warning(f"❌ Ningún resultado válido encontrado para '{busqueda}'.")
             return None
 
