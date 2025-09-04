@@ -786,86 +786,93 @@ async def reproducir_playlist(ctx):
         emit_with_context("queue_updated", {})
 
 
-async def obtener_recomendaciones_spotify_mejoradas(cancion_actual):
+# sonaria.py
+
+
+def obtener_canciones_mismo_artista(nombre_artista):
     """
-    Busca recomendaciones de canciones en Spotify. Si falla, usa Deezer como alternativa.
+    Busca y devuelve las canciones más populares de un artista usando la API de Spotify.
     """
     try:
-        # Verifica que el cliente de Spotify esté inicializado
         if not sp:
-            raise ValueError("El cliente de Spotify no está inicializado.")
-
-        # 1. Buscar la canción actual en Spotify para obtener el ID de la pista
-        results = await bot.loop.run_in_executor(
-            None,
-            lambda: sp.search(
-                q=f"{cancion_actual['titulo']} {cancion_actual['artista']}",
-                type="track",
-                limit=1,
-            ),
-        )
-
-        if not results or not results["tracks"]["items"]:
-            raise ValueError("No se encontró la canción en Spotify.")
-
-        track = results["tracks"]["items"][0]
-        track_id = track["id"]
-        artista_id = track["artists"][0]["id"]
-
-        # 2. Obtener características de audio para recomendaciones
-        audio_features = await bot.loop.run_in_executor(
-            None, lambda: sp.audio_features(tracks=[track_id])
-        )
-
-        if not audio_features or not audio_features[0]:
-            raise ValueError("No se pudieron obtener las características de audio.")
-
-        # 3. Generar recomendaciones usando la API de Spotify
-        recomendaciones_spotify = await bot.loop.run_in_executor(
-            None,
-            lambda: sp.recommendations(
-                seed_tracks=[track_id],
-                seed_artists=[artista_id],
-                limit=5,
-                target_danceability=audio_features[0].get("danceability"),
-                target_energy=audio_features[0].get("energy"),
-                target_valence=audio_features[0].get("valence"),
-            ),
-        )
-
-        lista_formateada = []
-        if recomendaciones_spotify and recomendaciones_spotify["tracks"]:
-            for rec_track in recomendaciones_spotify["tracks"]:
-                lista_formateada.append(
-                    {
-                        "titulo": rec_track["name"],
-                        "artista": rec_track["artists"][0]["name"],
-                        "mensaje_corto": f"Porque te gusta {cancion_actual['artista']}, Spotify te recomienda:",
-                    }
-                )
-            logger.info(
-                f"✅ Se generaron {len(lista_formateada)} recomendaciones con Spotify."
-            )
-            return lista_formateada
-
-    except Exception as e:
-        logger.warning(
-            f"⚠️ Error en Spotify API. Intentando con Deezer como alternativa...: {e}"
-        )
-        # Si la lógica de Spotify falla, llama a la función de Deezer.
-        try:
-            nombre_artista = cancion_actual.get("artista", "")
-            if nombre_artista:
-                deezer_recs = await bot.loop.run_in_executor(
-                    None, obtener_recomendaciones_deezer, nombre_artista
-                )
-                if deezer_recs:
-                    return deezer_recs
-        except Exception as deezer_e:
-            logger.error(f"❌ Error en la API de Deezer: {deezer_e}", exc_info=True)
+            logger.warning("El cliente de Spotify no está inicializado.")
             return []
 
-    return []  # Devuelve una lista vacía si ninguna de las dos opciones funciona.
+        # 1. Buscar el artista en Spotify
+        results = sp.search(q=f"artist:{nombre_artista}", type="artist", limit=1)
+        if not results["artists"]["items"]:
+            logger.info(f"No se encontró el artista '{nombre_artista}' en Spotify.")
+            return []
+
+        artist_id = results["artists"]["items"][0]["id"]
+
+        # 2. Obtener los top tracks del artista
+        top_tracks = sp.artist_top_tracks(artist_id)["tracks"]
+
+        lista_formateada = []
+        if top_tracks:
+            for track in top_tracks[:5]:
+                lista_formateada.append(
+                    {
+                        "titulo": track["name"],
+                        "artista": track["artists"][0]["name"],
+                        "mensaje_corto": f"Más de {nombre_artista}",
+                    }
+                )
+
+        logger.info(
+            f"✅ Se generaron {len(lista_formateada)} canciones del mismo artista con Spotify."
+        )
+        return lista_formateada
+
+    except Exception as e:
+        logger.error(
+            f"❌ Error al obtener canciones del mismo artista: {e}", exc_info=True
+        )
+        return []
+
+
+# sonaria.py
+
+
+async def obtener_recomendaciones_spotify_mejoradas(cancion_actual):
+    """
+    Función maestra para obtener recomendaciones.
+    Intenta primero la solución simple de Spotify, y si falla, usa Deezer.
+    """
+    nombre_artista = cancion_actual.get("artista", "")
+
+    # Evita llamadas si el artista es desconocido
+    if not nombre_artista or nombre_artista == "Artista Desconocido":
+        logger.warning(
+            f"No se pueden buscar recomendaciones para 'Artista Desconocido'."
+        )
+        return []
+
+    # 1. Intenta la solución simple y confiable de Spotify
+    try:
+        recomendaciones_simples = await bot.loop.run_in_executor(
+            None, obtener_canciones_mismo_artista, nombre_artista
+        )
+        if recomendaciones_simples:
+            return recomendaciones_simples
+    except Exception as e:
+        logger.warning(
+            f"⚠️ La búsqueda simple en Spotify falló. Intentando con Deezer: {e}"
+        )
+
+    # 2. Si Spotify falla, usa Deezer como alternativa
+    try:
+        deezer_recs = await bot.loop.run_in_executor(
+            None, obtener_recomendaciones_deezer, nombre_artista
+        )
+        if deezer_recs:
+            return deezer_recs
+    except Exception as deezer_e:
+        logger.error(f"❌ Error en la API de Deezer: {deezer_e}", exc_info=True)
+        return []
+
+    return []  # Devuelve una lista vacía si ninguna de las opciones funciona
 
 
 # ==============================================================================
