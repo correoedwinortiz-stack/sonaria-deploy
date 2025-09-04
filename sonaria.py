@@ -612,16 +612,18 @@ async def reproducir_archivo(voice_client, ruta_archivo):
         logger.error(f"❌ No se pudo encontrar el archivo a reproducir: {ruta_archivo}")
         return
     try:
-        # Volvemos a una fuente simple, sin opciones de tiempo
-        source = discord.FFmpegPCMAudio(ruta_archivo)
+        # Fuente con buffer aumentado para evitar cortes
+        source = discord.FFmpegPCMAudio(
+            ruta_archivo, before_options="-nostdin", options="-vn -buffer_size 4096k"
+        )
         audio_source_with_level = AudioLevelSource(source)
         voice_client.play(audio_source_with_level)
 
-        # Esperamos a que termine de sonar
+        # Esperar a que termine de sonar
         while voice_client.is_playing():
             await asyncio.sleep(0.1)
     except Exception as e:
-        logger.error(f"Error al reproducir {ruta_archivo}: {e}")
+        logger.error(f"❌ Error al reproducir {ruta_archivo}: {e}")
 
 
 @tasks.loop(seconds=2.0)
@@ -1609,6 +1611,11 @@ def auth_discord():
         f"https://discord.com/api/oauth2/authorize?client_id={DISCORD_CLIENT_ID}"
         f"&redirect_uri={redirect_uri}&response_type=code&scope={scopes}"
     )
+    from werkzeug.middleware.proxy_fix import ProxyFix
+
+    flask_app.wsgi_app = ProxyFix(flask_app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    flask_app.config.update(PREFERRED_URL_SCHEME="https")
+
     return redirect(discord_auth_url)
 
 
@@ -1657,26 +1664,23 @@ def auth_callback():
     return f"""
     <!DOCTYPE html>
     <html>
-    <head>
-        <title>Autenticando...</title>
-        <script>
-            try {{
-                // Guarda el token recibido en el localStorage de la ventana principal.
-                window.opener.localStorage.setItem('sonaria_jwt_token', '{jwt_token}');
-                
-                // Redirige la ventana principal a la página de inicio.
-                window.opener.location.href = "/";
-                
-                // Cierra esta ventana emergente.
-                window.close();
-            }} catch (e) {{
-                // En caso de error (ej. dominios diferentes), redirige como respaldo.
-                window.location.href = "/";
-            }}
-        </script>
-    </head>
+    <head><meta charset="utf-8"><title>Autenticado</title></head>
     <body>
-        <p>Autenticación completada. Redirigiendo...</p>
+    <script>
+    try {{
+      // Entrega el token al opener
+      window.opener.localStorage.setItem('sonaria_jwt_token', '{jwt_token}');
+      // Abre una pestaña nueva junto a la principal
+      window.opener.open('/', '_blank');
+      // Refresca la ventana principal por si quieres actualizar UI
+      window.opener.location.href = "/";
+      // Cierra el popup
+      window.close();
+    }} catch (e) {{
+      window.location.href = "/";
+    }}
+    </script>
+    Autenticación completada.
     </body>
     </html>
     """

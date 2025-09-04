@@ -1036,8 +1036,8 @@
         // PARTE 1: CONFIGURACIÓN Y VARIABLES GLOBALES
         // ==================================================
         // --- LÍNEAS CORREGIDAS ---
-        const BACKEND_URL = "http://34.29.230.121:8080";
-        const socket = io(BACKEND_URL);
+        const BACKEND_URL = window.location.origin;
+        const socket = io(BACKEND_URL, { transports: ["websocket"] });
 
 
         let currentUser = null;
@@ -1071,6 +1071,7 @@
             window.addEventListener('storage', (event) => {
                 if (event.key === 'sonaria_jwt_token' && event.newValue) {
                     console.log('¡Token detectado desde otra ventana! Verificando usuario...');
+                    window.open('/', '_blank');
                     verificarUsuario(); // Vuelve a ejecutar la verificación para actualizar la UI.
                 }
             });
