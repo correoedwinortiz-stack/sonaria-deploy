@@ -882,10 +882,6 @@ async def obtener_recomendaciones_spotify_mejoradas(cancion_actual):
 
 @tasks.loop(seconds=10.0)
 async def procesar_cola_canciones():
-    # LÍNEA DE DEBUG CRÍTICA - mantén esto temporalmente
-    logger.info(
-        f"🔍 DEBUG: Revisando colas. cola_canciones: {len(cola_canciones)}, cola_reproduccion: {len(cola_reproduccion)}"
-    )
 
     if not cola_canciones:
         return
