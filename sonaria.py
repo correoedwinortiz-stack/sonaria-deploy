@@ -962,12 +962,10 @@ async def procesar_cola_canciones():
                 "titulo": titulo_base,
                 "artista": artista_base,
             }
-            loop = asyncio.get_running_loop()
-            nuevas_sugerencias = await loop.run_in_executor(
-                None,
-                obtener_recomendaciones_spotify_mejoradas,
-                cancion_actual,
+            nuevas_sugerencias = await obtener_recomendaciones_spotify_mejoradas(
+                cancion_actual
             )
+
             if nuevas_sugerencias:
                 global recomendaciones_actuales
                 recomendaciones_actuales = nuevas_sugerencias
