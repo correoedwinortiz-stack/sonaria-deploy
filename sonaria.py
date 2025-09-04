@@ -1567,15 +1567,23 @@ def auth_callback():
     <head>
         <title>Autenticando...</title>
         <script>
-            // 1. Guarda el token recibido en el localStorage del navegador.
-            localStorage.setItem(\'sonaria_jwt_token\', \'{jwt_token}\');
-            
-            // 2. Redirige al usuario a la página principal.
-            window.location.href = "/";
+            try {{
+                // Guarda el token recibido en el localStorage de la ventana principal.
+                window.opener.localStorage.setItem('sonaria_jwt_token', '{jwt_token}');
+                
+                // Redirige la ventana principal a la página de inicio.
+                window.opener.location.href = "/";
+                
+                // Cierra esta ventana emergente.
+                window.close();
+            }} catch (e) {{
+                // En caso de error (ej. dominios diferentes), redirige como respaldo.
+                window.location.href = "/";
+            }}
         </script>
     </head>
     <body>
-        <p>Redirigiendo...</p>
+        <p>Autenticación completada. Redirigiendo...</p>
     </body>
     </html>
     """

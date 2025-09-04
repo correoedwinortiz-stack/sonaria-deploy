@@ -1356,13 +1356,14 @@
 
                     // Lógica para unirse al canal de voz.
                     mainModalButton.onclick = () => {
-                        // Aquí usamos el ID del canal de voz que nos proporcionaste en el .env
-                        const guildId = '1409669296669462723';
-                        const channelId = '1409669297852121294';
-                        // La URL de invitación es la forma más limpia de abrir la aplicación de Discord
-                        const discordVoiceUrl = `https://discord.com/invite/${guildId}/${channelId}`;
+                        // Usa el enlace de invitación de Discord que generaste.
+                        const discordVoiceUrl = "https://discord.gg/Mucy4Ccdet";
+
+                        // Abre la URL en una nueva pestaña o ventana, sin pasar por tu web.
                         window.open(discordVoiceUrl, '_blank');
-                        document.getElementById('welcomeModal').style.display = 'none'; // Cierra el modal
+
+                        // Oculta el modal una vez que se inicia la acción
+                        document.getElementById('welcomeModal').style.display = 'none';
                     };
 
                 } else {
