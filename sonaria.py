@@ -786,76 +786,86 @@ async def reproducir_playlist(ctx):
         emit_with_context("queue_updated", {})
 
 
-def obtener_recomendaciones_spotify_mejoradas(artista_base, titulo_base):
+async def obtener_recomendaciones_spotify_mejoradas(cancion_actual):
     """
-    Obtiene recomendaciones de canciones similares a una canción base,
-    usando el motor de recomendaciones de Spotify y sus características de audio.
+    Busca recomendaciones de canciones en Spotify. Si falla, usa Deezer como alternativa.
     """
-    if not sp:
-        logger.warning("Cliente de Spotify no está disponible.")
-        return []
-
     try:
-        # Paso 1: Encontrar la canción y artista para obtener los IDs
-        search_query = f"track:{titulo_base} artist:{artista_base}"
-        results = sp.search(q=search_query, type="track", limit=1)
+        # Verifica que el cliente de Spotify esté inicializado
+        if not sp:
+            raise ValueError("El cliente de Spotify no está inicializado.")
 
-        if not results["tracks"]["items"]:
-            logger.info(
-                f"Canción '{titulo_base}' de '{artista_base}' no encontrada en Spotify."
-            )
-            return []
+        # 1. Buscar la canción actual en Spotify para obtener el ID de la pista
+        results = await bot.loop.run_in_executor(
+            None,
+            lambda: sp.search(
+                q=f"{cancion_actual['titulo']} {cancion_actual['artista']}",
+                type="track",
+                limit=1,
+            ),
+        )
 
-        track_id = results["tracks"]["items"][0]["id"]
+        if not results or not results["tracks"]["items"]:
+            raise ValueError("No se encontró la canción en Spotify.")
 
-        # Paso 2: Obtener las características de audio de la canción base
-        audio_features = sp.audio_features(tracks=[track_id])
+        track = results["tracks"]["items"][0]
+        track_id = track["id"]
+        artista_id = track["artists"][0]["id"]
+
+        # 2. Obtener características de audio para recomendaciones
+        audio_features = await bot.loop.run_in_executor(
+            None, lambda: sp.audio_features(tracks=[track_id])
+        )
+
         if not audio_features or not audio_features[0]:
-            logger.info(
-                "No se pudieron obtener las características de audio para la canción."
-            )
-            return []
+            raise ValueError("No se pudieron obtener las características de audio.")
 
-        # Extraemos las características más relevantes para música bailable/latina
-        danceability = audio_features[0]["danceability"]
-        energy = audio_features[0]["energy"]
-        valence = audio_features[0]["valence"]
-
-        # Paso 3: Usar el endpoint de recomendaciones de Spotify con los parámetros correctos
-        # Incluimos los IDs de la canción y el artista como "seeds" (semillas)
-        recomendaciones = sp.recommendations(
-            seed_tracks=[track_id],
-            seed_artists=[results["tracks"]["items"][0]["artists"][0]["id"]],
-            # Definimos un "mercado" (país) para priorizar música de esa región.
-            # Puedes usar 'ES' para España, 'MX' para México, 'CO' para Colombia, etc.
-            market="CO",
-            limit=10,
-            # También podemos "orientar" las recomendaciones hacia las características de audio
-            target_danceability=danceability,
-            target_energy=energy,
-            target_valence=valence,
+        # 3. Generar recomendaciones usando la API de Spotify
+        recomendaciones_spotify = await bot.loop.run_in_executor(
+            None,
+            lambda: sp.recommendations(
+                seed_tracks=[track_id],
+                seed_artists=[artista_id],
+                limit=5,
+                target_danceability=audio_features[0].get("danceability"),
+                target_energy=audio_features[0].get("energy"),
+                target_valence=audio_features[0].get("valence"),
+            ),
         )
 
         lista_formateada = []
-        for track in recomendaciones["tracks"]:
-            lista_formateada.append(
-                {
-                    "titulo": track["name"],
-                    "artista": track["artists"][0]["name"],
-                    "mensaje_corto": f"Sugerencia: Porque te gusta {titulo_base}",
-                    "cover_url": (
-                        track["album"]["images"][0]["url"]
-                        if track["album"]["images"]
-                        else None
-                    ),
-                }
+        if recomendaciones_spotify and recomendaciones_spotify["tracks"]:
+            for rec_track in recomendaciones_spotify["tracks"]:
+                lista_formateada.append(
+                    {
+                        "titulo": rec_track["name"],
+                        "artista": rec_track["artists"][0]["name"],
+                        "mensaje_corto": f"Porque te gusta {cancion_actual['artista']}, Spotify te recomienda:",
+                    }
+                )
+            logger.info(
+                f"✅ Se generaron {len(lista_formateada)} recomendaciones con Spotify."
             )
-
-        return lista_formateada
+            return lista_formateada
 
     except Exception as e:
-        logger.error(f"Error al obtener recomendaciones de Spotify: {e}", exc_info=True)
-        return []
+        logger.warning(
+            f"⚠️ Error en Spotify API. Intentando con Deezer como alternativa...: {e}"
+        )
+        # Si la lógica de Spotify falla, llama a la función de Deezer.
+        try:
+            nombre_artista = cancion_actual.get("artista", "")
+            if nombre_artista:
+                deezer_recs = await bot.loop.run_in_executor(
+                    None, obtener_recomendaciones_deezer, nombre_artista
+                )
+                if deezer_recs:
+                    return deezer_recs
+        except Exception as deezer_e:
+            logger.error(f"❌ Error en la API de Deezer: {deezer_e}", exc_info=True)
+            return []
+
+    return []  # Devuelve una lista vacía si ninguna de las dos opciones funciona.
 
 
 # ==============================================================================
