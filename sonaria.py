@@ -412,6 +412,11 @@ async def limpiar_archivos_antiguos():
         logger.info("🧹 Limpieza completada. No se encontraron archivos para borrar.")
 
 
+# --- NUEVAS VARIABLES GLOBALES ---
+MIN_DURACION_SEGUNDOS = 90  # 1.5 minutos
+MAX_DURACION_SEGUNDOS = 420  # 7 minutos
+
+
 def descargar_audio_youtube(busqueda, archivo_salida):
     ruta_absoluta = os.path.join(DOWNLOAD_PATH, archivo_salida)
     ydl_opts = {
@@ -426,13 +431,41 @@ def descargar_audio_youtube(busqueda, archivo_salida):
         ],
         "noplaylist": True,
         "quiet": True,
-        "default_search": "ytsearch",
+        "default_search": "ytsearchmusic",  # 🎵 Buscar solo en música
     }
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([busqueda])
-        return ruta_absoluta
-    except Exception:
+            # 1. Buscar varios resultados (no descargar aún)
+            info = ydl.extract_info(f"ytsearchmusic10:{busqueda}", download=False)
+            if not info or "entries" not in info or not info["entries"]:
+                logger.warning(f"❌ No se encontraron resultados para '{busqueda}'.")
+                return None
+
+            # 2. Revisar hasta 10 resultados para encontrar uno válido
+            for entry in info["entries"]:
+                duracion = entry.get("duration")
+                titulo = entry.get("title")
+
+                if not duracion:
+                    continue  # saltar si no hay info de duración
+
+                if MIN_DURACION_SEGUNDOS <= duracion <= MAX_DURACION_SEGUNDOS:
+                    logger.info(
+                        f"🎶 Seleccionado: '{titulo}' ({duracion}s) como candidato válido."
+                    )
+                    # 3. Descargar este resultado
+                    ydl.download([entry["webpage_url"]])
+                    return ruta_absoluta
+                else:
+                    logger.info(f"⏭️ Descartado '{titulo}' por duración {duracion}s.")
+
+            # Si ningún resultado es válido
+            logger.warning(f"❌ Ningún resultado válido encontrado para '{busqueda}'.")
+            return None
+
+    except Exception as e:
+        logger.error(f"❌ Error al descargar '{busqueda}': {e}")
         return None
 
 
@@ -590,12 +623,6 @@ async def reproducir_archivo(voice_client, ruta_archivo):
             await asyncio.sleep(0.1)
     except Exception as e:
         logger.error(f"Error al reproducir {ruta_archivo}: {e}")
-
-
-# REEMPLAZA tu radio_manager con esta versión final y simplificada
-
-
-# REEMPLAZA tu radio_manager con esta versión que SÍ reproduce los jingles
 
 
 @tasks.loop(seconds=2.0)
@@ -1114,6 +1141,31 @@ async def process_web_commands():
                     "bot_status",
                     {"message": "👋 Bot desconectado.", "status": "disconnected"},
                 )
+
+
+@bot.command(name="siguiente", aliases=["skip"])
+@commands.has_role("DJ")
+async def siguiente(ctx):
+    """Permite al DJ saltar la canción actual y pasar a la siguiente en la cola."""
+    global playlist_en_curso
+
+    voice_client = ctx.guild.voice_client
+    if not voice_client or not voice_client.is_connected():
+        return await ctx.send("⚠️ No estoy conectado a un canal de voz.")
+
+    if voice_client.is_playing():
+        logger.info("⏭️ El DJ ha decidido saltar la canción actual.")
+        voice_client.stop()  # Detiene la canción actual
+
+        # Si hay más canciones en cola, reproducir inmediatamente la siguiente
+        if cola_reproduccion:
+            await ctx.send("⏭️ Saltando a la siguiente canción en la cola...")
+            if not playlist_en_curso:  # evitar doble ejecución
+                await reproducir_playlist(ctx)
+        else:
+            await ctx.send("⏭️ Se detuvo la canción, pero no hay más en la cola.")
+    else:
+        await ctx.send("⚠️ No hay ninguna canción sonando en este momento.")
 
 
 @bot.command(name="empezar", aliases=["start"])
