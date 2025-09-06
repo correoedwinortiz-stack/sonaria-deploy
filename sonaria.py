@@ -368,6 +368,49 @@ def parsear_dedicatoria(texto):
         return None
 
 
+def cargar_palabras_prohibidas(archivo_prohibidas):
+    """
+    Carga una lista de palabras prohibidas desde un archivo de texto.
+    Cada palabra debe estar en una nueva línea.
+    """
+    try:
+        with open(archivo_prohibidas, "r", encoding="utf-8") as f:
+            # Lee cada línea, elimina espacios en blanco y convierte a minúsculas
+            palabras = [linea.strip().lower() for linea in f if linea.strip()]
+        logger.info(f"✅ Se cargaron {len(palabras)} palabras prohibidas.")
+        return set(palabras)  # Usar un 'set' para búsquedas más rápidas
+    except FileNotFoundError:
+        logger.error(f"❌ Error: El archivo '{archivo_prohibidas}' no fue encontrado.")
+        return set()
+    except Exception as e:
+        logger.error(f"❌ Error al leer el archivo '{archivo_prohibidas}': {e}")
+        return set()
+
+
+# Variable global para almacenar las palabras prohibidas
+PALABRAS_PROHIBIDAS = cargar_palabras_prohibidas("palabras_prohibidas.txt")
+
+
+def contiene_palabras_prohibidas(texto):
+    """
+    Verifica si un texto contiene alguna de las palabras prohibidas.
+    Normaliza el texto para una comparación insensible a mayúsculas y acentos.
+    """
+    if not PALABRAS_PROHIBIDAS:
+        return False
+
+    texto_normalizado = normalizar_texto(
+        texto
+    )  # Utiliza la función `normalizar_texto` existente
+
+    for palabra in PALABRAS_PROHIBIDAS:
+        # Busca la palabra completa, no solo como parte de otra palabra
+        if f" {palabra} " in f" {texto_normalizado} ":
+            return True
+
+    return False
+
+
 # ==============================================================================
 # ||                 TAREA DE LIMPIEZA DE ARCHIVOS ANTIGUOS                   ||
 # ==============================================================================
@@ -1262,6 +1305,14 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
+    # Comprobación de palabras prohibidas para peticiones de canciones
+    if contiene_palabras_prohibidas(message.content):
+        await message.add_reaction("🚫")
+        await message.channel.send(
+            f"🚫 Lo siento {message.author.mention}, tu petición contiene palabras prohibidas y no puede ser procesada."
+        )
+        return
+
     if message.channel.name == "peticiones" and "cancion" in normalizar_texto(
         message.content
     ):
@@ -1501,6 +1552,26 @@ def handle_song_request_from_client(data):
     mensaje = data.get("mensaje")
 
     if not cancion:
+        return
+
+    # Comprobación de palabras prohibidas en los campos de la petición
+    if (
+        contiene_palabras_prohibidas(cancion)
+        or (dedicatoria and contiene_palabras_prohibidas(dedicatoria))
+        or (mensaje and contiene_palabras_prohibidas(mensaje))
+    ):
+
+        logger.warning(
+            f"❌ Petición rechazada de {usuario_nombre} por contener palabras prohibidas."
+        )
+        emit_with_context(
+            "mensaje_a_cliente",
+            {
+                "texto": "❌ Tu petición contiene palabras prohibidas y no puede ser procesada. Por favor, revisa el título, dedicatoria y mensaje.",
+                "usuario": "Bot SONARIA",
+                "esBot": True,
+            },
+        )
         return
 
     logger.info(f"✅ Petición por Socket.IO recibida: '{cancion}' de {usuario_nombre}")
