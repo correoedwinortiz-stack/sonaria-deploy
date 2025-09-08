@@ -1311,6 +1311,8 @@ async def on_message(message):
         await message.channel.send(
             f"🚫 Lo siento {message.author.mention}, tu petición contiene palabras prohibidas y no puede ser procesada."
         )
+
+        await message.delete()
         return
 
     if message.channel.name == "peticiones" and "cancion" in normalizar_texto(
